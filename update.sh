@@ -150,14 +150,19 @@ self_update() {
   rm -f "$tmp"
 }
 
-# brainbox-login ebenfalls aktuell halten
-update_login_cmd() {
-  local tmp
-  tmp="$(mktemp)"
-  if curl -fsSL "${RAW}/brainbox-login.sh" -o "$tmp" 2>/dev/null && bash -n "$tmp" 2>/dev/null && [[ -s "$tmp" ]]; then
-    cmp -s "$tmp" /usr/bin/brainbox-login || install -m 755 "$tmp" /usr/bin/brainbox-login
-  fi
-  rm -f "$tmp"
+# Die Brainbox-Befehle ebenfalls aktuell halten
+update_helpers() {
+  local pair src dst tmp
+  for pair in "brainbox-login.sh:/usr/bin/brainbox-login" "brainbox-connect.sh:/usr/bin/brainbox-connect" "connect/sync.mjs:/opt/brainbox-connect/sync.mjs"; do
+    src="${pair%%:*}"; dst="${pair#*:}"
+    tmp="$(mktemp)"
+    if curl -fsSL "${RAW}/${src}" -o "$tmp" 2>/dev/null && [[ -s "$tmp" ]]; then
+      if [[ "$src" == *.mjs ]]; then node --check "$tmp" 2>/dev/null || { rm -f "$tmp"; continue; }; else bash -n "$tmp" 2>/dev/null || { rm -f "$tmp"; continue; }; fi
+      mkdir -p "$(dirname "$dst")"
+      cmp -s "$tmp" "$dst" || install -m 755 "$tmp" "$dst"
+    fi
+    rm -f "$tmp"
+  done
 }
 
 # --- Ablauf -----------------------------------------------------------------------
@@ -169,7 +174,7 @@ fi
 : >"$LOG"
 
 self_update "$@"
-update_login_cmd
+update_helpers
 
 CURRENT="$(cat "$VERSION_FILE" 2>/dev/null || echo "unbekannt")"
 if [[ -z "$OUTLINE_VERSION" ]]; then

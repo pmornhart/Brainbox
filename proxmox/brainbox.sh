@@ -45,6 +45,7 @@ var_wiki_name="${var_wiki_name:-Brainbox}"
 var_domain="${var_domain-$DEFAULT_DOMAIN}"  # leer setzen = nur http://IP:3000
 var_admin_name="${var_admin_name:-}"
 var_admin_email="${var_admin_email:-}"    # leer = Wiki beim ersten Aufruf im Browser anlegen
+var_pve_sync="${var_pve_sync:-yes}"       # yes = jede VM/jeder Container bekommt einen Wiki-Eintrag (nur Lesezugriff)
 var_bridge="${var_bridge:-vmbr0}"
 var_net="${var_net:-dhcp}"        # dhcp oder z. B. 192.168.1.50/24
 var_gateway="${var_gateway:-}"    # nur bei fester IP
@@ -129,6 +130,7 @@ HN="$var_hostname"; DISK="$var_disk"; CPU="$var_cpu"; RAM="$var_ram"; SWAP="$var
 BRIDGE="$var_bridge"; NET="$var_net"; GATE="$var_gateway"; VLAN="$var_vlan"
 UNPRIV="$var_unprivileged"; PW="$var_pw"; VERBOSE="$var_verbose"
 WIKI_NAME="$var_wiki_name"; DOMAIN="$var_domain"; ADMIN_NAME="$var_admin_name"; ADMIN_EMAIL="$var_admin_email"
+PVE_SYNC="$var_pve_sync"
 
 # --- Einstellungen ------------------------------------------------------------
 wt() { whiptail --backtitle "Proxmox VE · ${APP}" "$@" 3>&1 1>&2 2>&3; }
@@ -152,6 +154,13 @@ wiki_settings() {
       break
     fi
   done
+  if [[ -n "$ADMIN_EMAIL" ]]; then
+    if wt --title "PROXMOX IM WIKI" --yesno "Für jede VM und jeden Container automatisch einen Wiki-Eintrag anlegen und aktuell halten?\n\nDafür bekommt das Wiki einen Proxmox-Zugang nur zum Lesen (Rolle PVEAuditor). Neue VMs erscheinen nach spätestens 5 Minuten im Wiki." 13 70; then
+      PVE_SYNC="yes"
+    else
+      PVE_SYNC="no"
+    fi
+  fi
 }
 
 advanced_settings() {
@@ -187,6 +196,7 @@ summary() {
   [[ -z "$DOMAIN" ]] || addr="https://${DOMAIN}"
   echo -e "  🌐  Adresse:      ${BL}${addr}${CL}"
   echo -e "  👤  Admin:        ${BL}${ADMIN_NAME:-–}${ADMIN_EMAIL:+ <${ADMIN_EMAIL}>}${CL}"
+  echo -e "  🔄  Proxmox im Wiki: ${BL}$([[ "$PVE_SYNC" == "yes" && -n "$ADMIN_EMAIL" ]] && echo ja || echo nein)${CL}"
   echo -e "  🆔  Container-ID: ${BL}${CTID}${CL}"
   echo -e "  🏠  Hostname:     ${BL}${HN}${CL}"
   echo -e "  🖥️  System:       ${BL}${var_os} ${var_version} (${ARCH})${CL}"
@@ -295,14 +305,48 @@ msg_ok "Container läuft (IP ${IP})"
 # --- Installation im Container ----------------------------------------------------------
 TMP_DIR="$(mktemp -d)"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd || true)"
-for f in install.sh update.sh brainbox-login.sh; do
+for pair in install.sh:install.sh update.sh:update.sh brainbox-login.sh:login.sh brainbox-connect.sh:connect.sh connect/sync.mjs:sync.mjs; do
+  f="${pair%%:*}"; t="${pair#*:}"
   if [[ -n "$SCRIPT_DIR" && -f "${SCRIPT_DIR}/brainbox.sh" && -f "${SCRIPT_DIR}/../${f}" ]]; then
-    cp "${SCRIPT_DIR}/../${f}" "${TMP_DIR}/${f}"
+    cp "${SCRIPT_DIR}/../${f}" "${TMP_DIR}/${t}"
   else
-    curl -fsSL "${RAW}/${f}" -o "${TMP_DIR}/${f}"
+    curl -fsSL "${RAW}/${f}" -o "${TMP_DIR}/${t}"
   fi
-  pct push "$CTID" "${TMP_DIR}/${f}" "/root/brainbox-${f#brainbox-}" --perms 755
+  pct push "$CTID" "${TMP_DIR}/${t}" "/root/brainbox-${t}" --perms 755
 done
+
+# Proxmox-Zugang nur zum Lesen für den Wiki-Abgleich (Nutzer brainbox@pve, Rolle PVEAuditor)
+if [[ "$PVE_SYNC" == "yes" && -n "$ADMIN_EMAIL" ]]; then
+  msg_info "Proxmox-Zugang (nur Lesen) für das Wiki wird angelegt"
+  TOKEN_NAME="wiki${CTID}"
+  pveum user add brainbox@pve --comment "Brainbox-Wiki (nur Lesen)" >/dev/null 2>&1 || true
+  pveum acl modify / --users brainbox@pve --roles PVEAuditor >/dev/null
+  pveum user token remove brainbox@pve "$TOKEN_NAME" >/dev/null 2>&1 || true
+  TOKEN_JSON="$(pveum user token add brainbox@pve "$TOKEN_NAME" --privsep 0 --comment "Brainbox ${WIKI_NAME} (CT ${CTID})" --output-format json)"
+  TOKEN_SECRET="$(echo "$TOKEN_JSON" | sed -n 's/.*"value"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+  [[ -n "$TOKEN_SECRET" ]] || die "Proxmox-Token konnte nicht angelegt werden."
+  HOST_IP="$({ ip -4 -o addr show "$BRIDGE" 2>/dev/null || true; } | awk '{print $4}' | cut -d/ -f1 | head -n1)"
+  [[ -n "$HOST_IP" ]] || HOST_IP="$(hostname -I | awk '{print $1}')"
+  PVE_URL="https://${HOST_IP}:8006"
+  # Zertifikat prüfen: Proxmox-CA, sonst öffentliches Zertifikat, sonst nicht prüfen
+  CA_LINE="" INSECURE_LINE=""
+  if curl -s -o /dev/null --cacert /etc/pve/pve-root-ca.pem "${PVE_URL}/api2/json/version" 2>/dev/null; then
+    pct push "$CTID" /etc/pve/pve-root-ca.pem /root/brainbox-pve-ca.pem --perms 644
+    CA_LINE="PVE_CA_FILE='/etc/brainbox/pve-root-ca.pem'"
+  elif ! curl -s -o /dev/null "${PVE_URL}/api2/json/version" 2>/dev/null; then
+    INSECURE_LINE="PVE_INSECURE='1'"
+  fi
+  {
+    echo "PVE_URL='${PVE_URL}'"
+    echo "PVE_TOKEN_ID='brainbox@pve!${TOKEN_NAME}'"
+    echo "PVE_TOKEN_SECRET='${TOKEN_SECRET}'"
+    [[ -n "$CA_LINE" ]] && echo "$CA_LINE"
+    [[ -n "$INSECURE_LINE" ]] && echo "$INSECURE_LINE"
+  } >"${TMP_DIR}/pve.env"
+  chmod 600 "${TMP_DIR}/pve.env"
+  pct push "$CTID" "${TMP_DIR}/pve.env" /root/brainbox-pve.env --perms 600
+  msg_ok "Proxmox-Zugang angelegt (brainbox@pve!${TOKEN_NAME}, nur Lesen)"
+fi
 
 echo -e "\n  ${BOLD}Installation im Container${CL}"
 pct exec "$CTID" -- env \
@@ -346,4 +390,5 @@ else
   echo -e "${INFO}${YW}Beim ersten Aufruf Wiki-Name und Admin-E-Mail im Browser eingeben.${CL}"
 fi
 echo -e "${INFO}${YW}E-Mail-Login, Passkeys, Google, Microsoft … einrichten:${CL} pct enter ${CTID}  →  brainbox-login"
+echo -e "${INFO}${YW}Claude, Proxmox und NetBird verbinden:${CL} pct enter ${CTID}  →  brainbox-connect"
 echo -e "${INFO}${YW}Noch ein Wiki?${CL} Dieses Skript erneut ausführen und eine andere Domain eintragen."

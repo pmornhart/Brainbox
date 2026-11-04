@@ -245,7 +245,7 @@ $STD systemctl daemon-reload
 $STD systemctl enable --now "$SERVICE"
 msg_ok "Dienst angelegt"
 
-msg_info "Befehle update und brainbox-login werden eingerichtet"
+msg_info "Befehle update, brainbox-login und brainbox-connect werden eingerichtet"
 apt_install whiptail
 # Vom Proxmox-Host mitgeschickt (/root/brainbox-*.sh), sonst aus dem Repo laden
 install_cmd() { # install_cmd <Datei im Repo> <Ziel>
@@ -260,7 +260,17 @@ install_cmd() { # install_cmd <Datei im Repo> <Ziel>
 }
 install_cmd update.sh /usr/bin/update
 install_cmd brainbox-login.sh /usr/bin/brainbox-login
-msg_ok "Befehle eingerichtet (im Container: update, brainbox-login)"
+install_cmd brainbox-connect.sh /usr/bin/brainbox-connect
+mkdir -p /opt/brainbox-connect /etc/brainbox
+chmod 700 /etc/brainbox
+if [[ -f /root/brainbox-sync.mjs ]]; then
+  install -m 755 /root/brainbox-sync.mjs /opt/brainbox-connect/sync.mjs
+  rm -f /root/brainbox-sync.mjs
+else
+  curl -fsSL "${RAW}/connect/sync.mjs" -o /opt/brainbox-connect/sync.mjs
+  chmod 755 /opt/brainbox-connect/sync.mjs
+fi
+msg_ok "Befehle eingerichtet (im Container: update, brainbox-login, brainbox-connect)"
 
 LOGIN_LINK=""
 if [[ -n "$ADMIN_EMAIL" ]]; then
@@ -269,6 +279,23 @@ if [[ -n "$ADMIN_EMAIL" ]]; then
   msg_ok "Wiki '${WIKI_NAME}' angelegt, Admin: ${ADMIN_NAME} <${ADMIN_EMAIL}>"
   if [[ "$FROM_HOST" != "yes" ]]; then
     LOGIN_LINK="$(brainbox-login link --raw "$ADMIN_EMAIL" 2>>"$LOG" || true)"
+  fi
+fi
+
+# Proxmox-Zugang vom Host mitgeschickt: Abgleich einrichten (jede VM/jeder Container = ein Eintrag)
+PVE_SYNC="no"
+if [[ -f /root/brainbox-pve.env ]]; then
+  install -m 600 /root/brainbox-pve.env /etc/brainbox/connect.env
+  [[ -f /root/brainbox-pve-ca.pem ]] && install -m 644 /root/brainbox-pve-ca.pem /etc/brainbox/pve-root-ca.pem
+  rm -f /root/brainbox-pve.env /root/brainbox-pve-ca.pem
+  if [[ -n "$ADMIN_EMAIL" ]]; then
+    msg_info "Proxmox wird mit dem Wiki verbunden"
+    if $STD brainbox-connect proxmox --from-install; then
+      PVE_SYNC="yes"
+      msg_ok "Proxmox verbunden – jede VM und jeder Container steht jetzt im Wiki"
+    else
+      msg_warn "Proxmox-Abgleich hat noch nicht geklappt – später: brainbox-connect proxmox (Log: ${LOG})"
+    fi
   fi
 fi
 
@@ -281,7 +308,7 @@ echo -e "  \033[1;92mBrainbox\033[m · Outline-Wissensdatenbank"
 echo -e "  🌐  Adresse: \033[36m${_bb_url}\033[m (im Heimnetz: http://${_bb_ip}:3000)"
 echo -e "  🖥️  $(hostname) · $(. /etc/os-release && echo "$PRETTY_NAME")"
 echo -e "  📦  Outline $(cat /root/.brainbox 2>/dev/null || echo '?') · Update: \033[33mupdate\033[m · Anmeldung: \033[33mbrainbox-login\033[m"
-echo -e "  🔑  Login-Link für den Admin: \033[33mbrainbox-login link\033[m"
+echo -e "  🔑  Login-Link: \033[33mbrainbox-login link\033[m · Claude, Proxmox, NetBird: \033[33mbrainbox-connect\033[m"
 echo ""
 unset _bb_ip _bb_url
 EOF
@@ -309,6 +336,7 @@ echo
 msg_ok "${APP} ist installiert!"
 echo -e "${INFO}${YW}Adresse:${CL} ${BL}${WIKI_URL}${CL}"
 [[ -n "$DOMAIN" ]] && echo -e "${INFO}${YW}Reverse-Proxy:${CL} ${DOMAIN} → http://${IP}:${PORT} (Websockets an, SSL)"
+[[ "$PVE_SYNC" == "yes" ]] && echo -e "${INFO}${YW}Proxmox-Abgleich:${CL} an – Sammlung 'Proxmox' im Wiki, alle 5 Minuten aktuell"
 if [[ -n "$LOGIN_LINK" ]]; then
   echo -e "${INFO}${YW}Dein Login-Link (einmal benutzbar, 60 Minuten gültig):${CL}"
   echo -e "${TAB}${TAB}${BL}${LOGIN_LINK}${CL}"
@@ -317,3 +345,4 @@ elif [[ -z "$ADMIN_EMAIL" ]]; then
   echo -e "${INFO}${YW}Beim ersten Aufruf Wiki-Name und Admin-E-Mail im Browser eingeben.${CL}"
 fi
 [[ "$FROM_HOST" == "yes" ]] || echo -e "${INFO}${YW}E-Mail-Login, Passkeys, Google, Microsoft … einrichten mit:${CL} brainbox-login"
+[[ "$FROM_HOST" == "yes" ]] || echo -e "${INFO}${YW}Claude, Proxmox und NetBird verbinden mit:${CL} brainbox-connect"
