@@ -67,5 +67,11 @@ RestartSec=2
 WantedBy=multi-user.target
 EOF
 
+# Wiki-Bild: Brainbox-Logo, solange keins gewählt ist (für Installationen von vor 1.0.0)
+if command -v psql >/dev/null 2>&1; then
+  (cd /tmp && sudo -u postgres psql -d outline -qtAc \
+    "UPDATE teams SET \"avatarUrl\" = '/images/icon-192.png' WHERE \"avatarUrl\" IS NULL OR \"avatarUrl\" = '';") >/dev/null 2>&1 || true
+fi
+
 systemctl daemon-reload >/dev/null 2>&1 || true
 systemctl enable brainbox.service brainbox-zentrale.service >/dev/null 2>&1 || true
