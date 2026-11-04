@@ -33,6 +33,8 @@ _Zuletzt aktualisiert: 05.11.2026_
     - sortiert die Sammlungen einmalig: Start, Bereiche, Proxmox, NetBird, Von Claude (Flag in `/var/lib/brainbox/sammlungen-sortiert`)
     - Der Abgleich läuft auch ohne Proxmox und NetBird; dann pflegt er nur die Anleitung.
   - Kurzlinks `/zentrale/go/anleitung|spickzettel|proxmox|netbird|bereiche|regeln|domains`.
+  - Server-Karten in den Einstellungen zeigen, ob der Server erreichbar ist und wie viele VMs/Container er hat. Mit „Im Wiki“ geht es direkt zur Server-Seite, ebenso bei NetBird zur Übersicht.
+  - Getestet am 05.11.: frische Installation ohne Proxmox. Die Anleitung liegt in „Start“, die Startseite zeigt den Hinweis „Bring dein Homelab ins Wiki“, und neue Nutzer landen zuerst in „Start“.
   - Getestet am 05.11.:
     - Update 1.0.0 → 1.1.0 im Testcontainer, zweimal `update --force`
     - Screenshots von Desktop, Handy und Login
@@ -92,6 +94,8 @@ _Zuletzt aktualisiert: 05.11.2026_
 
 ## Offen / nächste Schritte
 
+- **Philip fragen: Brainbox 1.1.0 nach `main` übernehmen?** Liegt fertig getestet auf `claude/dazzling-curie-an4hqr`. Danach zeigt seine Brainbox „Update verfügbar · 1.1.0“.
+- Der Tag `v1.0.0` ließ sich aus der Cloud nicht pushen (403). Philip kann ihn bei Bedarf auf GitHub als Release anlegen.
 - Erledigt 04.11.2026: Brainbox 1.0.0 nach `main` übernommen, Tag `v1.0.0`. Ab jetzt zeigen Installationen „Update verfügbar“, sobald `brainbox.version` auf `main` hochgezählt wird.
 - Für ein Update an Philips Installationen: Änderung auf `main`, `BRAINBOX_VERSION` erhöhen, `CHANGELOG.md` ergänzen, Tag setzen.
 - Philip: Reverse-Proxy für `brainbox.morncloud.de` → `http://<IP>:3000` mit Websockets, Postfach für Login-Mails, Google-OAuth-Client und Microsoft-App-Registrierung anlegen.
