@@ -8,6 +8,10 @@
 #   brainbox-login set KEY=WERT …  Werte direkt in die .env schreiben
 #   brainbox-login unset KEY …     Werte leeren
 #   brainbox-login testmail <an>   Test-Mail über die SMTP-Einstellungen senden
+#   brainbox-login link [E-Mail]   einmaligen Login-Link erstellen (60 Min. gültig),
+#                                  ohne E-Mail für den ersten Admin
+#   brainbox-login workspace <Wiki-Name> <Admin-Name> <Admin-E-Mail>
+#                                  Arbeitsbereich und Admin anlegen (nur einmal)
 #
 # Nach Änderungen wird Outline neu gestartet.
 # Lizenz: MIT, siehe LICENSE.
@@ -93,6 +97,89 @@ restart_service() {
   return 1
 }
 
+# --- Arbeitsbereich und Login-Link ----------------------------------------------
+wait_ready() { # wait_ready <Sekunden> – wartet, bis Outline antwortet
+  local max="${1:-600}" t=0
+  until curl -fsS -o /dev/null "http://127.0.0.1:${PORT}/_health" 2>/dev/null; do
+    sleep 3
+    t=$((t + 3))
+    ((t < max)) || return 1
+  done
+}
+
+create_workspace() { # create_workspace <Wiki-Name> <Admin-Name> <Admin-E-Mail>
+  local name="$1" admin="$2" email="$3" jar csrf body code
+  if workspace_exists; then
+    warn "Es gibt schon einen Arbeitsbereich – nichts geändert. Ein weiteres Wiki = weiterer Container mit eigener Domain."
+    return 0
+  fi
+  [[ -n "$name" && -n "$admin" && "$email" =~ ^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$ ]] ||
+    fail "Beispiel: brainbox-login workspace 'Brainbox' 'Philip' philip@example.com"
+  wait_ready 900 || fail "Brainbox antwortet nicht – Log: journalctl -u ${SERVICE} -n 50"
+  jar="$(mktemp)"
+  curl -fsS -c "$jar" -b "$jar" -o /dev/null "http://127.0.0.1:${PORT}/"
+  csrf="$(awk '$6 ~ /csrfToken$/ {print $7}' "$jar" | tail -n1)"
+  body="$(jq -n --arg t "$name" --arg u "$admin" --arg e "$email" '{teamName: $t, userName: $u, userEmail: $e}')"
+  code="$(curl -sS -c "$jar" -b "$jar" -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+    -H "x-csrf-token: ${csrf}" --data "$body" "http://127.0.0.1:${PORT}/api/installation.create" || true)"
+  if ! [[ "$code" =~ ^(200|302)$ ]] || ! workspace_exists; then
+    rm -f "$jar"
+    fail "Arbeitsbereich konnte nicht angelegt werden (HTTP ${code:-?})."
+  fi
+  ok "Arbeitsbereich '${name}' angelegt, Admin: ${admin} <${email}>"
+  # Sicherheit: nur eingeladene Personen dürfen rein (sonst könnte sich bei Google,
+  # Microsoft oder Discord jedes Konto selbst als Mitglied anmelden)
+  code="$(curl -sS -c "$jar" -b "$jar" -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+    -H "x-csrf-token: ${csrf}" --data '{"inviteRequired":true}' "http://127.0.0.1:${PORT}/api/team.update" || true)"
+  rm -f "$jar"
+  if [[ "$code" == "200" ]]; then
+    ok "Nur eingeladene Personen kommen rein (Einstellungen → Sicherheit → Einladungen erforderlich)"
+  else
+    warn "Bitte selbst einschalten: Einstellungen → Sicherheit → Einladungen erforderlich (HTTP ${code:-?})"
+  fi
+}
+
+login_link() { # login_link [--raw] [E-Mail] – einmaliger Login-Link, 60 Minuten gültig
+  local raw="no" email="" js out err who tok link
+  if [[ "${1:-}" == "--raw" ]]; then raw="yes"; shift; fi
+  email="${1:-}"
+  workspace_exists || fail "Es gibt noch keinen Arbeitsbereich: brainbox-login workspace <Wiki-Name> <Admin-Name> <Admin-E-Mail>"
+  js="${APP_DIR}/build/server/scripts/zz-brainbox-link.js"
+  err="$(mktemp)"
+  # Nutzt Outlines eigenen Übergabe-Token (wie /auth/redirect ihn erwartet): einmal benutzbar
+  cat >"$js" <<'JS'
+require("./bootstrap");
+const JWT = require("jsonwebtoken");
+const { User } = require("../models");
+(async () => {
+  const email = (process.env.BB_EMAIL || "").trim().toLowerCase();
+  const minutes = parseInt(process.env.BB_MINUTES || "60", 10);
+  const where = email ? { email } : { role: "admin" };
+  const user = await User.findOne({ where, order: [["createdAt", "ASC"]] });
+  if (!user) { console.error("Kein Nutzer gefunden"); process.exit(2); }
+  const now = new Date();
+  const token = JWT.sign({ id: user.id, createdAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + minutes * 60000).toISOString(), type: "transfer" }, user.jwtSecret);
+  process.stdout.write(user.email + " " + token + "\n");
+  process.exit(0);
+})().catch((e) => { console.error(e.message); process.exit(1); });
+JS
+  if ! out="$(cd "$APP_DIR" && BB_EMAIL="$email" BB_MINUTES=60 NODE_ENV=production node "$js" 2>"$err")"; then
+    rm -f "$js"
+    fail "Login-Link konnte nicht erstellt werden${email:+ (gibt es ${email} im Wiki?)}: $(grep -v Warning "$err" | tail -n1)"
+  fi
+  rm -f "$js" "$err"
+  who="${out%% *}"
+  tok="${out##* }"
+  link="$(current_url)/auth/redirect?token=${tok}"
+  if [[ "$raw" == "yes" ]]; then
+    echo "$link"
+  else
+    echo -e "  Login-Link für ${BOLD}${who}${CL} (einmal benutzbar, 60 Minuten gültig):"
+    echo -e "  ${BL}${link}${CL}"
+  fi
+}
+
 # --- Status ------------------------------------------------------------------
 mark() { if is_set "$1"; then echo -e "${GN}eingerichtet${CL}${2:+ (${2})}"; else echo -e "${YW}aus${CL}"; fi; }
 
@@ -103,7 +190,14 @@ status() {
   echo
   echo -e "  ${BOLD}Brainbox – Anmeldung${CL}"
   echo -e "  Adresse:     ${BL}${url}${CL}"
-  if workspace_exists; then echo -e "  Workspace:   ${GN}angelegt${CL}"; else echo -e "  Workspace:   ${YW}noch nicht angelegt – im Browser öffnen und anlegen${CL}"; fi
+  if workspace_exists; then
+    echo -e "  Workspace:   ${GN}angelegt${CL}"
+    if [[ "$(cd /tmp && sudo -u postgres psql -d "$PG_DB_NAME" -tAc 'SELECT bool_and("inviteRequired") FROM teams' 2>/dev/null)" == "t" ]]; then
+      echo -e "  Zugang:      ${GN}nur mit Einladung${CL}"
+    else
+      echo -e "  Zugang:      ${YW}offen – jedes Google/Microsoft/Discord-Konto kann sich anmelden (Einstellungen → Sicherheit)${CL}"
+    fi
+  else echo -e "  Workspace:   ${YW}noch nicht angelegt – brainbox-login workspace <Wiki-Name> <Admin-Name> <E-Mail>${CL}"; fi
   echo -e "  E-Mail:      $(if [[ -n "$smtp" ]]; then echo -e "${GN}eingerichtet${CL} (${smtp})"; else echo -e "${YW}aus${CL}"; fi)"
   if [[ "$url" == https://* ]]; then echo -e "  Passkeys:    ${GN}bereit${CL} (im Konto unter Einstellungen → Passkeys anlegen)"
   else echo -e "  Passkeys:    ${YW}brauchen HTTPS – Adresse auf https://… stellen${CL}"; fi
@@ -304,7 +398,7 @@ main_menu() {
   command -v whiptail >/dev/null 2>&1 || fail "whiptail fehlt (apt install whiptail)."
   local choice
   while :; do
-    choice="$(wt --title "ANMELDUNG EINRICHTEN" --cancel-button "Fertig" --menu "Adresse: $(current_url)\nWas möchtest du einrichten?" 20 72 10 \
+    choice="$(wt --title "ANMELDUNG EINRICHTEN" --cancel-button "Fertig" --menu "Adresse: $(current_url)\nWas möchtest du einrichten?" 22 72 11 \
       1 "Adresse (Domain, HTTPS)" \
       2 "E-Mail-Login (Postfach für Login-Mails)" \
       3 "Passkeys" \
@@ -313,7 +407,8 @@ main_menu() {
       6 "Discord       – $(is_set DISCORD_CLIENT_ID && echo an || echo aus)" \
       7 "OIDC (Pocket ID, Authentik …) – $(is_set OIDC_CLIENT_ID && echo an || echo aus)" \
       8 "Sprache       – $(env_get DEFAULT_LANGUAGE)" \
-      9 "Übersicht anzeigen")" || break
+      9 "Übersicht anzeigen" \
+      10 "Login-Link für den Admin erstellen")" || break
     case "$choice" in
     1) menu_url ;;
     2) menu_smtp ;;
@@ -324,6 +419,7 @@ main_menu() {
     7) menu_oidc ;;
     8) menu_language ;;
     9) clear; status; read -rp "  Weiter mit Enter … " _ ;;
+    10) clear; (login_link) || true; echo; read -rp "  Weiter mit Enter … " _ ;;
     esac
   done
   clear
@@ -349,6 +445,8 @@ unset)
   restart_service
   ;;
 testmail) testmail "${2:-}" ;;
--h | --help | help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//' ;;
+link) shift; login_link "$@" ;;
+workspace) shift; create_workspace "${1:-}" "${2:-}" "${3:-}" ;;
+-h | --help | help) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//' ;;
 *) fail "Unbekannter Befehl: $1 (siehe brainbox-login --help)" ;;
 esac

@@ -35,6 +35,13 @@ OUTLINE_VERSION="${BRAINBOX_OUTLINE_VERSION:-}" # leer = neuestes Release
 
 VERBOSE="${BRAINBOX_VERBOSE:-no}"
 PW_SET="${BRAINBOX_PW_SET:-no}"
+FROM_HOST="${BRAINBOX_FROM_HOST:-no}"
+
+# Ein Container = ein Wiki. Arbeitsbereich und Admin werden automatisch angelegt.
+WIKI_NAME="${BRAINBOX_WIKI_NAME:-Brainbox}"
+DOMAIN="${BRAINBOX_DOMAIN:-}"          # z. B. brainbox.morncloud.de, leer = nur http://IP:3000
+ADMIN_NAME="${BRAINBOX_ADMIN_NAME:-}"
+ADMIN_EMAIL="${BRAINBOX_ADMIN_EMAIL:-}" # leer = Arbeitsbereich beim ersten Aufruf im Browser anlegen
 
 # --- Ausgabe ------------------------------------------------------------------
 YW=$'\033[33m'; GN=$'\033[1;92m'; RD=$'\033[01;31m'; BL=$'\033[36m'; CL=$'\033[m'
@@ -135,6 +142,17 @@ setup_postgresql_db() {
 [[ $EUID -eq 0 ]] || { msg_error "Bitte als root ausführen."; exit 1; }
 : >"$LOG"
 
+# Ohne Proxmox-Skript von Hand gestartet: Wiki-Daten abfragen
+if [[ "$FROM_HOST" != "yes" && -z "$ADMIN_EMAIL" && -t 0 ]]; then
+  echo -e "${INFO}${YW}Ein Container = ein Wiki. Für weitere Wikis einfach weitere Container mit eigener Domain.${CL}"
+  read -rp "  Name des Wikis [${WIKI_NAME}]: " _v; WIKI_NAME="${_v:-$WIKI_NAME}"
+  read -rp "  Domain (leer = nur http://IP:${PORT}): " DOMAIN
+  read -rp "  Dein Name (Admin): " ADMIN_NAME
+  read -rp "  Deine E-Mail (Admin): " ADMIN_EMAIL
+fi
+DOMAIN="${DOMAIN#http://}"; DOMAIN="${DOMAIN#https://}"; DOMAIN="${DOMAIN%%/*}"
+[[ -n "$ADMIN_NAME" ]] || ADMIN_NAME="${ADMIN_EMAIL%%@*}"
+
 msg_info "Container wird vorbereitet"
 for _ in {1..30}; do [[ -n "$(local_ip)" ]] && break; sleep 1; done
 [[ -n "$(local_ip)" ]] || { msg_error "Keine IP-Adresse – Netzwerk prüfen"; exit 1; }
@@ -186,7 +204,8 @@ sed -i "s#^SECRET_KEY=.*#SECRET_KEY=${SECRET_KEY}#" .env
 sed -i "s#^UTILS_SECRET=.*#UTILS_SECRET=${UTILS_SECRET}#" .env
 sed -i "s#^DATABASE_URL=.*#DATABASE_URL=postgres://${PG_DB_USER}:${PG_DB_PASS}@localhost:5432/${PG_DB_NAME}#" .env
 sed -i "s#^REDIS_URL=.*#REDIS_URL=redis://localhost:6379#" .env
-sed -i "s#^URL=.*#URL=http://${IP}:${PORT}#" .env
+if [[ -n "$DOMAIN" ]]; then WIKI_URL="https://${DOMAIN}"; else WIKI_URL="http://${IP}:${PORT}"; fi
+sed -i "s#^URL=.*#URL=${WIKI_URL}#" .env
 sed -i "s#^PORT=.*#PORT=${PORT}#" .env
 sed -i "s#^FORCE_HTTPS=.*#FORCE_HTTPS=false#" .env
 sed -i "s#^DEFAULT_LANGUAGE=.*#DEFAULT_LANGUAGE=de_DE#" .env
@@ -243,16 +262,28 @@ install_cmd update.sh /usr/bin/update
 install_cmd brainbox-login.sh /usr/bin/brainbox-login
 msg_ok "Befehle eingerichtet (im Container: update, brainbox-login)"
 
+LOGIN_LINK=""
+if [[ -n "$ADMIN_EMAIL" ]]; then
+  msg_info "Wiki '${WIKI_NAME}' wird angelegt (Outline startet zum ersten Mal)"
+  $STD brainbox-login workspace "$WIKI_NAME" "$ADMIN_NAME" "$ADMIN_EMAIL"
+  msg_ok "Wiki '${WIKI_NAME}' angelegt, Admin: ${ADMIN_NAME} <${ADMIN_EMAIL}>"
+  if [[ "$FROM_HOST" != "yes" ]]; then
+    LOGIN_LINK="$(brainbox-login link --raw "$ADMIN_EMAIL" 2>>"$LOG" || true)"
+  fi
+fi
+
 msg_info "Container wird angepasst"
 cat <<'EOF' >/etc/profile.d/00_brainbox-motd.sh
 _bb_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+_bb_url="$(sed -n 's/^URL=//p' /opt/brainbox/.env 2>/dev/null | tr -d "\"'")"
 echo ""
 echo -e "  \033[1;92mBrainbox\033[m · Outline-Wissensdatenbank"
-echo -e "  🌐  Weboberfläche: \033[36mhttp://${_bb_ip}:3000\033[m"
+echo -e "  🌐  Adresse: \033[36m${_bb_url}\033[m (im Heimnetz: http://${_bb_ip}:3000)"
 echo -e "  🖥️  $(hostname) · $(. /etc/os-release && echo "$PRETTY_NAME")"
 echo -e "  📦  Outline $(cat /root/.brainbox 2>/dev/null || echo '?') · Update: \033[33mupdate\033[m · Anmeldung: \033[33mbrainbox-login\033[m"
+echo -e "  🔑  Login-Link für den Admin: \033[33mbrainbox-login link\033[m"
 echo ""
-unset _bb_ip
+unset _bb_ip _bb_url
 EOF
 if [[ "$PW_SET" != "yes" ]]; then
   # Ohne Root-Passwort: automatische Anmeldung auf der Proxmox-Konsole (wie beim Original)
@@ -276,7 +307,13 @@ msg_ok "Aufgeräumt"
 
 echo
 msg_ok "${APP} ist installiert!"
-echo -e "${INFO}${YW}Weboberfläche:${CL} ${BL}http://${IP}:${PORT}${CL}"
-echo -e "${INFO}${YW}Beim ersten Start migriert Outline die Datenbank – die Seite kann 1–2 Minuten brauchen.${CL}"
-echo -e "${INFO}${YW}Beim ersten Aufruf Workspace-Name und Admin-E-Mail eingeben – danach bist du als Admin angemeldet.${CL}"
-echo -e "${INFO}${YW}Danach E-Mail-Login, Passkeys, Google, Microsoft … einrichten mit:${CL} brainbox-login"
+echo -e "${INFO}${YW}Adresse:${CL} ${BL}${WIKI_URL}${CL}"
+[[ -n "$DOMAIN" ]] && echo -e "${INFO}${YW}Reverse-Proxy:${CL} ${DOMAIN} → http://${IP}:${PORT} (Websockets an, SSL)"
+if [[ -n "$LOGIN_LINK" ]]; then
+  echo -e "${INFO}${YW}Dein Login-Link (einmal benutzbar, 60 Minuten gültig):${CL}"
+  echo -e "${TAB}${TAB}${BL}${LOGIN_LINK}${CL}"
+  echo -e "${INFO}${YW}Neuer Link jederzeit mit:${CL} brainbox-login link"
+elif [[ -z "$ADMIN_EMAIL" ]]; then
+  echo -e "${INFO}${YW}Beim ersten Aufruf Wiki-Name und Admin-E-Mail im Browser eingeben.${CL}"
+fi
+[[ "$FROM_HOST" == "yes" ]] || echo -e "${INFO}${YW}E-Mail-Login, Passkeys, Google, Microsoft … einrichten mit:${CL} brainbox-login"

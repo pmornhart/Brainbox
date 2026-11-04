@@ -10,7 +10,18 @@ In der **Proxmox-Shell** (Host, nicht im Container) ausführen:
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/pmornhart/Brainbox/main/proxmox/brainbox.sh)"
 ```
 
-Es erscheint ein Dialog: **Standard-Einstellungen** übernimmt die Werte unten, **Erweiterte Einstellungen** fragt ID, Hostname, Disk, CPU, RAM, Bridge, IP/Gateway, VLAN, Root-Passwort und Container-Typ ab.
+Es erscheint ein Dialog: **Standard-Einstellungen** übernimmt die Werte unten, **Erweiterte Einstellungen** fragt zusätzlich ID, Hostname, Disk, CPU, RAM, Bridge, IP/Gateway, VLAN, Root-Passwort und Container-Typ ab.
+
+In beiden Fällen fragt das Skript:
+
+| Frage | Beispiel |
+|---|---|
+| Name des Wikis | `Brainbox` |
+| Domain | `brainbox.morncloud.de` (leer = nur `http://IP:3000`) |
+| Dein Name | `Philip` |
+| Deine E-Mail | Admin des Wikis |
+
+Daraus legt es das Wiki samt Admin an und zeigt am Ende einen **Login-Link** (einmal benutzbar, 60 Minuten gültig). Der Hostname ergibt sich aus der Domain (`brainbox.morncloud.de` → `brainbox`).
 
 ## Standardwerte
 
@@ -42,8 +53,10 @@ Es erscheint ein Dialog: **Standard-Einstellungen** übernimmt die Werte unten, 
 ## Hinweise
 
 - Nach der Installation migriert Outline die Datenbank. Die Weboberfläche ist deshalb ein bis zwei Minuten nicht erreichbar.
-- **Erster Aufruf:** Outline zeigt „Create workspace“. Workspace-Name, deinen Namen und deine E-Mail eingeben, danach bist du direkt als Admin angemeldet. Google, Microsoft oder Slack sind dafür nicht nötig. Die Slack-Platzhalter aus der Beispielkonfiguration entfernt Brainbox (anders als das Original), sonst erscheint statt dieser Seite ein nicht funktionierender Slack-Knopf.
-- **Spätere Anmeldungen** richtest du mit `brainbox-login` ein, siehe unten. Anbieter erst eintragen, **nachdem** der Workspace angelegt ist, sonst verschwindet die Einrichtungsseite.
+- **Erster Login:** über den Login-Link vom Ende der Installation. Abgelaufen oder schon benutzt? Im Container `brainbox-login link` für einen neuen. Google, Microsoft oder Slack sind dafür nicht nötig.
+- Ohne Admin-E-Mail legt das Skript kein Wiki an. Dann zeigt Outline beim ersten Aufruf „Arbeitsbereich erstellen“ im Browser.
+- **Weitere Anmeldewege** richtest du mit `brainbox-login` ein, siehe unten.
+- **Mehrere Wikis:** Ein Container ist ein Wiki. Für ein weiteres das Skript erneut ausführen und eine andere Domain eintragen.
 - Die Oberfläche ist auf Deutsch eingestellt (`DEFAULT_LANGUAGE=de_DE`).
 - Ändert sich die IP des Containers, mit `brainbox-login` → Adresse die neue Adresse eintragen.
 
@@ -71,7 +84,7 @@ Im Container `brainbox-login` eingeben. Das Menü fragt alles Nötige ab, schrei
 | OIDC | Name, Issuer-URL, Client-ID, Secret (Pocket ID, Authentik, Keycloak …) | `<URL>/auth/oidc.callback` |
 | Sprache | Deutsch oder Englisch | – |
 
-Ohne Menü: `brainbox-login status`, `brainbox-login set KEY=WERT …`, `brainbox-login unset KEY …`, `brainbox-login testmail du@beispiel.de`.
+Ohne Menü: `brainbox-login status`, `brainbox-login link [E-Mail]`, `brainbox-login set KEY=WERT …`, `brainbox-login unset KEY …`, `brainbox-login testmail du@beispiel.de`, `brainbox-login workspace <Wiki-Name> <Admin-Name> <E-Mail>` (nur wenn noch keins existiert).
 
 Gut zu wissen:
 
@@ -100,15 +113,19 @@ Das Install-Skript im Container aufgerufen startet ebenfalls das Update, genau w
 Alle Werte lassen sich vorab setzen, dann läuft die Installation ohne Dialog:
 
 ```bash
-var_mode=default var_cpu=4 var_ram=6144 var_disk=12 var_net=192.168.1.50/24 var_gateway=192.168.1.1 \
+var_mode=default var_wiki_name="Werkstatt" var_domain=werkstatt.morncloud.de \
+  var_admin_name=Philip var_admin_email=du@example.de var_cpu=4 var_ram=6144 \
   bash -c "$(curl -fsSL https://raw.githubusercontent.com/pmornhart/Brainbox/main/proxmox/brainbox.sh)"
 ```
 
 | Variable | Standard | Bedeutung |
 |---|---|---|
-| `var_mode` | fragen | `default` oder `advanced` |
+| `var_mode` | fragen | `default` oder `advanced` (gesetzt = keine Dialoge) |
+| `var_wiki_name` | `Brainbox` | Name des Wikis |
+| `var_domain` | `brainbox.morncloud.de` | Domain, leer = nur `http://IP:3000` |
+| `var_admin_name` / `var_admin_email` | – | Admin; ohne E-Mail kein automatisches Wiki |
 | `var_ctid` | nächste freie | Container-ID |
-| `var_hostname` | `brainbox` | Hostname |
+| `var_hostname` | aus der Domain | Hostname |
 | `var_cpu` / `var_ram` / `var_disk` / `var_swap` | 2 / 4096 / 8 / 512 | Kerne / MB / GB / MB |
 | `var_bridge` | `vmbr0` | Netzwerk-Bridge |
 | `var_net` / `var_gateway` / `var_vlan` | `dhcp` / – / – | Netzwerk |

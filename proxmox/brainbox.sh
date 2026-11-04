@@ -9,8 +9,13 @@
 # unprivilegiert) und installiert darin Outline. Im Container aufgerufen
 # startet das Skript stattdessen das Update – wie beim Original.
 #
+# Ein Container = ein Wiki mit eigener Domain. Wiki und Admin werden bei der
+# Installation automatisch angelegt, am Ende gibt es einen Login-Link.
+# Weiteres Wiki: Skript erneut ausführen und eine andere Domain eintragen.
+#
 # Werte vorab setzen (ohne Dialog), z. B.:
-#   var_cpu=4 var_ram=6144 var_mode=default bash -c "$(curl -fsSL …/proxmox/brainbox.sh)"
+#   var_mode=default var_wiki_name="Familie" var_domain=familie.example.de \
+#   var_admin_name=Philip var_admin_email=du@example.de bash -c "$(curl -fsSL …/proxmox/brainbox.sh)"
 #
 # Nachbau von community-scripts/ProxmoxVE ct/outline.sh
 # (MIT, Autor: Slaviša Arežina / tremor021). Lizenz: MIT, siehe LICENSE.
@@ -24,6 +29,7 @@ REPO="pmornhart/Brainbox"
 BRANCH="${BRAINBOX_BRANCH:-main}"
 RAW="${BRAINBOX_RAW:-https://raw.githubusercontent.com/${REPO}/${BRANCH}}"
 PORT="3000"
+DEFAULT_DOMAIN="brainbox.morncloud.de"
 
 # Standardwerte (wie beim Original), überschreibbar per Umgebungsvariable
 var_tags="${var_tags:-documentation}"
@@ -34,7 +40,11 @@ var_swap="${var_swap:-512}"
 var_os="${var_os:-debian}"
 var_version="${var_version:-13}"
 var_unprivileged="${var_unprivileged:-1}"
-var_hostname="${var_hostname:-$NSAPP}"
+var_hostname="${var_hostname:-}"    # leer = aus der Domain (brainbox.morncloud.de → brainbox)
+var_wiki_name="${var_wiki_name:-Brainbox}"
+var_domain="${var_domain-$DEFAULT_DOMAIN}"  # leer setzen = nur http://IP:3000
+var_admin_name="${var_admin_name:-}"
+var_admin_email="${var_admin_email:-}"    # leer = Wiki beim ersten Aufruf im Browser anlegen
 var_bridge="${var_bridge:-vmbr0}"
 var_net="${var_net:-dhcp}"        # dhcp oder z. B. 192.168.1.50/24
 var_gateway="${var_gateway:-}"    # nur bei fester IP
@@ -118,6 +128,7 @@ CTID="${var_ctid:-$(pvesh get /cluster/nextid)}"
 HN="$var_hostname"; DISK="$var_disk"; CPU="$var_cpu"; RAM="$var_ram"; SWAP="$var_swap"
 BRIDGE="$var_bridge"; NET="$var_net"; GATE="$var_gateway"; VLAN="$var_vlan"
 UNPRIV="$var_unprivileged"; PW="$var_pw"; VERBOSE="$var_verbose"
+WIKI_NAME="$var_wiki_name"; DOMAIN="$var_domain"; ADMIN_NAME="$var_admin_name"; ADMIN_EMAIL="$var_admin_email"
 
 # --- Einstellungen ------------------------------------------------------------
 wt() { whiptail --backtitle "Proxmox VE · ${APP}" "$@" 3>&1 1>&2 2>&3; }
@@ -125,6 +136,22 @@ ask() { # ask <Titel> <Text> <Standardwert>
   local v
   v="$(wt --title "$1" --inputbox "$2" 10 64 "$3")" || die "Abgebrochen."
   echo "$v"
+}
+
+valid_email() { [[ "$1" =~ ^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$ ]]; }
+
+wiki_settings() {
+  WIKI_NAME="$(ask "WIKI" "Name des Wikis (ein Container = ein Wiki)" "$WIKI_NAME")"
+  [[ -n "$WIKI_NAME" ]] || WIKI_NAME="$APP"
+  DOMAIN="$(ask "DOMAIN" "Unter welcher Domain soll das Wiki laufen?\n(leer = nur im Heimnetz über http://IP:3000)" "$DOMAIN")"
+  ADMIN_NAME="$(ask "ADMIN" "Dein Name (Admin des Wikis)" "$ADMIN_NAME")"
+  while :; do
+    ADMIN_EMAIL="$(ask "ADMIN-E-MAIL" "Deine E-Mail-Adresse (Admin des Wikis)" "$ADMIN_EMAIL")"
+    valid_email "$ADMIN_EMAIL" && break
+    if [[ -z "$ADMIN_EMAIL" ]] && wt --title "ADMIN-E-MAIL" --yesno "Ohne E-Mail wird das Wiki nicht automatisch angelegt, sondern beim ersten Aufruf im Browser.\n\nSo weitermachen?" 11 64; then
+      break
+    fi
+  done
 }
 
 advanced_settings() {
@@ -155,6 +182,11 @@ advanced_settings() {
 
 summary() {
   echo -e "  ${BOLD}Einstellungen${CL}"
+  echo -e "  📚  Wiki:         ${BL}${WIKI_NAME}${CL}"
+  local addr="http://<IP>:${PORT}"
+  [[ -z "$DOMAIN" ]] || addr="https://${DOMAIN}"
+  echo -e "  🌐  Adresse:      ${BL}${addr}${CL}"
+  echo -e "  👤  Admin:        ${BL}${ADMIN_NAME:-–}${ADMIN_EMAIL:+ <${ADMIN_EMAIL}>}${CL}"
   echo -e "  🆔  Container-ID: ${BL}${CTID}${CL}"
   echo -e "  🏠  Hostname:     ${BL}${HN}${CL}"
   echo -e "  🖥️  System:       ${BL}${var_os} ${var_version} (${ARCH})${CL}"
@@ -165,7 +197,9 @@ summary() {
   echo
 }
 
+MODE_ASKED="no"
 if [[ -z "$var_mode" ]]; then
+  MODE_ASKED="yes"
   CHOICE="$(wt --title "${APP}" --menu "Wie soll der Container angelegt werden?" 14 64 3 \
     "1" "Standard-Einstellungen" \
     "2" "Erweiterte Einstellungen" \
@@ -175,6 +209,14 @@ if [[ -z "$var_mode" ]]; then
   2) var_mode="advanced" ;;
   *) die "Abgebrochen." ;;
   esac
+fi
+[[ "$MODE_ASKED" == "yes" ]] && wiki_settings
+DOMAIN="${DOMAIN#http://}"; DOMAIN="${DOMAIN#https://}"; DOMAIN="${DOMAIN%%/*}"
+[[ -z "$ADMIN_EMAIL" ]] || valid_email "$ADMIN_EMAIL" || die "Ungültige E-Mail-Adresse: ${ADMIN_EMAIL}"
+[[ -n "$ADMIN_NAME" ]] || ADMIN_NAME="${ADMIN_EMAIL%%@*}"
+if [[ -z "$HN" ]]; then
+  if [[ -n "$DOMAIN" ]]; then HN="${DOMAIN%%.*}"; else HN="$(echo "$WIKI_NAME" | tr '[:upper:]' '[:lower:]')"; fi
+  HN="$(echo "$HN" | tr -cd 'a-z0-9-')"; [[ -n "$HN" ]] || HN="$NSAPP"
 fi
 [[ "$var_mode" == "advanced" ]] && advanced_settings
 is_number "$CTID" && ctid_free "$CTID" || die "Container-ID ${CTID} ist ungültig oder schon vergeben."
@@ -264,6 +306,11 @@ done
 
 echo -e "\n  ${BOLD}Installation im Container${CL}"
 pct exec "$CTID" -- env \
+  BRAINBOX_FROM_HOST=yes \
+  BRAINBOX_WIKI_NAME="$WIKI_NAME" \
+  BRAINBOX_DOMAIN="$DOMAIN" \
+  BRAINBOX_ADMIN_NAME="$ADMIN_NAME" \
+  BRAINBOX_ADMIN_EMAIL="$ADMIN_EMAIL" \
   BRAINBOX_VERBOSE="$VERBOSE" \
   BRAINBOX_PW_SET="$([[ -n "$PW" ]] && echo yes || echo no)" \
   BRAINBOX_BRANCH="$BRANCH" \
@@ -273,16 +320,30 @@ pct exec "$CTID" -- env \
 pct exec "$CTID" -- rm -f /root/brainbox-install.sh
 
 # --- Beschreibung (Notizen) in Proxmox -------------------------------------------------
+if [[ -n "$DOMAIN" ]]; then WIKI_URL="https://${DOMAIN}"; else WIKI_URL="http://${IP}:${PORT}"; fi
 pct set "$CTID" --description "<div align='center'>
-<h2>🧠 Brainbox</h2>
-<p>Outline-Wissensdatenbank</p>
-<p><a href='http://${IP}:${PORT}' target='_blank'>Weboberfläche</a> · <a href='https://github.com/${REPO}' target='_blank'>GitHub</a> · <a href='https://docs.getoutline.com/s/hosting/' target='_blank'>Outline-Doku</a></p>
-<p>Update im Container: <code>update</code></p>
+<h2>🧠 ${WIKI_NAME}</h2>
+<p>Brainbox · Outline-Wissensdatenbank</p>
+<p><a href='${WIKI_URL}' target='_blank'>${WIKI_URL}</a> · <a href='http://${IP}:${PORT}' target='_blank'>Heimnetz</a> · <a href='https://github.com/${REPO}' target='_blank'>GitHub</a> · <a href='https://docs.getoutline.com/s/hosting/' target='_blank'>Outline-Doku</a></p>
+<p>Im Container: <code>update</code> · <code>brainbox-login</code> · <code>brainbox-login link</code></p>
 </div>" >/dev/null
 
 echo
 msg_ok "Fertig!"
-echo -e "${INFO}${GN}${APP} wurde erfolgreich eingerichtet.${CL}"
-echo -e "${INFO}${YW}Aufrufen unter:${CL} ${BGN}http://${IP}:${PORT}${CL}"
-echo -e "${INFO}${YW}Beim ersten Aufruf Workspace-Name und Admin-E-Mail eingeben – danach bist du als Admin angemeldet.${CL}"
-echo -e "${INFO}${YW}Danach E-Mail-Login, Passkeys, Google, Microsoft … einrichten:${CL} pct enter ${CTID}  →  brainbox-login"
+echo -e "${INFO}${GN}Wiki '${WIKI_NAME}' wurde eingerichtet.${CL}"
+echo -e "${INFO}${YW}Adresse:${CL} ${BGN}${WIKI_URL}${CL}${DOMAIN:+   (im Heimnetz: http://${IP}:${PORT})}"
+if [[ -n "$DOMAIN" ]]; then
+  echo -e "${INFO}${YW}Reverse-Proxy einrichten:${CL} ${DOMAIN} → http://${IP}:${PORT}  (Websockets an, SSL-Zertifikat)"
+fi
+if [[ -n "$ADMIN_EMAIL" ]]; then
+  LINK="$(pct exec "$CTID" -- brainbox-login link --raw "$ADMIN_EMAIL" 2>/dev/null || true)"
+  if [[ -n "$LINK" ]]; then
+    echo -e "${INFO}${YW}Dein Login-Link (einmal benutzbar, 60 Minuten gültig${DOMAIN:+, geht sobald der Reverse-Proxy steht}):${CL}"
+    echo -e "${TAB}${TAB}${BL}${LINK}${CL}"
+  fi
+  echo -e "${INFO}${YW}Neuer Login-Link jederzeit:${CL} pct exec ${CTID} -- brainbox-login link"
+else
+  echo -e "${INFO}${YW}Beim ersten Aufruf Wiki-Name und Admin-E-Mail im Browser eingeben.${CL}"
+fi
+echo -e "${INFO}${YW}E-Mail-Login, Passkeys, Google, Microsoft … einrichten:${CL} pct enter ${CTID}  →  brainbox-login"
+echo -e "${INFO}${YW}Noch ein Wiki?${CL} Dieses Skript erneut ausführen und eine andere Domain eintragen."

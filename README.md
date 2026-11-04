@@ -11,14 +11,16 @@
 
 Die Wissensdatenbank [Outline](https://www.getoutline.com) mit einem Befehl als LXC-Container auf Proxmox VE: Nachbau des [community-scripts Outline-Skripts](https://community-scripts.org/scripts/outline).
 
-<p align="center"><img src="docs/erster-start.png" alt="Brainbox beim ersten Aufruf: Workspace anlegen" width="640"></p>
+<p align="center"><img src="docs/dokument.png" alt="Brainbox: Dokument mit Checkliste und Tabelle" width="720"></p>
 
 ## Funktionen
 
 - 🚀 **Ein Einzeiler** in der Proxmox-Shell legt den Container an und installiert alles
 - ⚙️ **Standard oder Erweitert**: Dialog für ID, Hostname, CPU, RAM, Disk, Netzwerk, VLAN, Passwort
 - 📚 **Outline** aus dem neuesten offiziellen Release, mit Node.js 26, PostgreSQL 16 und Redis
-- 🔐 **Erster Start ohne Fremd-Login**: Workspace und Admin direkt im Browser anlegen
+- 📚 **Ein Container = ein Wiki**: Wiki-Name, Domain und Admin werden bei der Installation abgefragt und automatisch angelegt
+- 🔗 **Login-Link** am Ende der Installation, neuer Link jederzeit mit `brainbox-login link`
+- 🌐 **Mehrere Wikis**: Skript erneut ausführen, andere Domain eintragen
 - 🔑 **Sechs Anmeldewege**: E-Mail-Link, Passkey, Google, Microsoft, Discord, OIDC (z. B. Pocket ID), alles per Menü mit `brainbox-login`
 - 🇩🇪 **Oberfläche auf Deutsch**
 - 🔄 **`update`-Befehl** im Container: sichert vorher Datenbank und Einstellungen, spielt bei Fehlern die alte Version zurück
@@ -36,7 +38,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/pmornhart/Brainbox/main/
 |---|---|---|---|---|
 | 2 Kerne | 4096 MB | 8 GB | Debian 13 | 3000 |
 
-Danach im Browser `http://<IP>:3000` öffnen, Workspace-Name, Name und E-Mail eingeben, fertig. Beim allerersten Start migriert Outline die Datenbank, das dauert ein bis zwei Minuten.
+Das Skript fragt **Wiki-Name, Domain (z. B. `brainbox.morncloud.de`), deinen Namen und deine E-Mail** ab, legt das Wiki an und zeigt am Ende einen **Login-Link** (einmal benutzbar, 60 Minuten gültig). Mit Domain muss vorher der Reverse-Proxy stehen: Domain → `http://<IP>:3000`, Websockets an, SSL.
 
 Alle Details, Pfade und Optionen: **[Proxmox Quick-Start](docs/proxmox-quickstart.md)**.
 
@@ -55,13 +57,18 @@ Im Container `brainbox-login` eingeben. Ein Menü richtet Adresse (Domain/HTTPS)
 | Discord | Discord-Konten, optional nur Mitglieder eines Servers | HTTPS mit Domain, App im Discord Developer Portal |
 | OIDC | Konten im eigenen Login-Dienst (Pocket ID, Authentik, Keycloak …) | den Login-Dienst |
 
-Erst den Arbeitsbereich im Browser anlegen, dann die Anbieter eintragen. Sonst verschwindet die Einrichtungsseite.
+Für den ersten Login brauchst du nichts davon: Der Login-Link aus der Installation reicht. Danach am besten gleich einen Passkey anlegen (Profil → Einstellungen → Passkeys).
+
+## Mehrere Wikis
+
+Ein Container ist ein großes Wiki. Für ein weiteres Wiki das Skript einfach noch einmal ausführen und eine andere Domain eintragen, z. B. `werkstatt.morncloud.de`. Jedes Wiki hat eigene Nutzer, eigene Anmeldewege und eigene Updates.
 
 ## Bedienung
 
 | Was | Wo |
 |---|---|
 | Anmeldung einrichten | `brainbox-login` (Übersicht: `brainbox-login status`) |
+| Neuer Login-Link | `brainbox-login link` (für andere: `brainbox-login link name@example.de`) |
 | Einstellungen | `/opt/brainbox/.env` (danach `systemctl restart brainbox`) |
 | Logs | `journalctl -u brainbox -f` |
 | Datenbank-Zugang | `/root/brainbox.creds` |
