@@ -260,9 +260,9 @@ html.embed, html.embed body { height: auto; background: transparent; }
 
   function pProxmox() {
     const list = S.proxmox.length ? S.proxmox.map((x) => `<div class="server">
-        <span class="dot ok"></span>
-        <div><b>${esc(x.name)}</b><div class="meta">${esc(x.url)} · ${esc(x.tokenId)}${x.insecure ? " · Zertifikat ungeprüft" : ""}</div></div>
-        <div class="acts"><button type="button" class="btn small" data-act="proxmox/test" data-name="${esc(x.name)}">Prüfen</button><button type="button" class="btn small danger" data-act="proxmox/remove" data-name="${esc(x.name)}">Entfernen</button></div>
+        <span class="dot ${x.online === false ? "warn" : "ok"}"></span>
+        <div><b>${esc(x.name)}</b><div class="meta">${esc(x.url)} · ${esc(x.tokenId)}${x.insecure ? " · Zertifikat ungeprüft" : ""}${x.guests != null ? ` · ${x.guests} VMs/Container` : ""}${x.online === false ? " · gerade nicht erreichbar" : ""}</div></div>
+        <div class="acts">${x.wikiUrl ? `<a class="btn small" href="${esc(x.wikiUrl)}" style="text-decoration:none">Im Wiki</a>` : ""}<button type="button" class="btn small" data-act="proxmox/test" data-name="${esc(x.name)}">Prüfen</button><button type="button" class="btn small danger" data-act="proxmox/remove" data-name="${esc(x.name)}">Entfernen</button></div>
       </div>`).join("") : `<div class="empty">Noch kein Proxmox-Server verbunden. Leg unten den ersten an.</div>`;
     return `<div class="phead"><div class="kicker">Verbindungen</div><h1>Proxmox-Server</h1>
       <p class="lede">Verbinde beliebig viele Proxmox-Server oder Cluster. Jeder bekommt im Wiki eine eigene Seite mit Nodes und Auslastung, darunter je VM und Container ein Eintrag. Neue VMs erscheinen nach spätestens 5 Minuten, gelöschte werden archiviert. Brainbox liest Proxmox nur, ändert dort nichts.</p></div>
@@ -290,7 +290,7 @@ html.embed, html.embed body { height: auto; background: transparent; }
     return `<div class="phead"><div class="kicker">Verbindungen</div><h1>NetBird</h1>
       <p class="lede">Holt alle NetBird-Geräte, Netzwerke und Domains ins Wiki und verknüpft sie mit den passenden VMs – über gleichen Namen oder gleiche IP.</p></div>
       ${S.netbird ? `<div class="server"><span class="dot ok"></span><div><b>Verbunden</b><div class="meta">${esc(S.netbird.url)} · ${S.sync.counts.peers} Geräte im Wiki</div></div>
-        <div class="acts"><button type="button" class="btn small danger" data-act="netbird/remove">Trennen</button></div></div>` : ""}
+        <div class="acts">${S.netbird.wikiUrl ? `<a class="btn small" href="${esc(S.netbird.wikiUrl)}" style="text-decoration:none">Im Wiki</a>` : ""}<button type="button" class="btn small danger" data-act="netbird/remove">Trennen</button></div></div>` : ""}
       <pre class="out" id="out-netbird" hidden></pre>
       <div class="card"><h2>${S.netbird ? "Zugang ändern" : "NetBird verbinden"}</h2>
         <ol class="steps">

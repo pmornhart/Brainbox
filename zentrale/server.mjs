@@ -167,8 +167,13 @@ async function status(req, me) {
     ctid: (() => { try { return fs.readFileSync(path.join(CONF_DIR, "ctid"), "utf8").trim(); } catch { return ""; } })(),
     wiki: { url, name: me?.team?.name || "Brainbox", inviteRequired: !!me?.team?.inviteRequired, language: env.DEFAULT_LANGUAGE || "" },
     user: { name: me?.user?.name || "" },
-    proxmox: (servers || []).map((x) => ({ name: x.name, url: x.url, tokenId: x.tokenId, insecure: !!x.insecure })),
-    netbird: conn.NETBIRD_URL ? { url: conn.NETBIRD_URL } : null,
+    proxmox: (servers || []).map((x) => ({
+      name: x.name, url: x.url, tokenId: x.tokenId, insecure: !!x.insecure,
+      wikiUrl: state.docs?.[`pvesrv:${x.name}`]?.url || null,
+      online: state.summary?.proxmox?.servers?.find((y) => y.name === x.name)?.ok ?? null,
+      guests: state.summary?.proxmox?.servers?.find((y) => y.name === x.name)?.guests ?? null,
+    })),
+    netbird: conn.NETBIRD_URL ? { url: conn.NETBIRD_URL, wikiUrl: state.docs?.["nb:overview"]?.url || null } : null,
     claude: { account: claude, email: claudeMail, mcpUrl: `${url}/mcp`, key: !!conn.CLAUDE_API_KEY },
     sync: {
       lastRun: state.lastRun || null, timer: timer.output.trim() === "active", bot: !!conn.OUTLINE_API_KEY,
