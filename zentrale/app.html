@@ -31,7 +31,7 @@ code, .mono { font-family: var(--mono); font-size: 0.88em; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .shell { display: grid; grid-template-columns: 250px minmax(0, 1fr); min-height: 100%; background: linear-gradient(to right, var(--rail) 249px, var(--line) 249px 250px, transparent 250px); }
-.rail { background: var(--rail); border-right: 1px solid var(--line); padding: 18px 12px; display: flex; flex-direction: column; gap: 18px; position: sticky; top: 0; height: 100vh; }
+.rail { background: var(--rail); border-right: 1px solid var(--line); padding: 18px 12px; display: flex; flex-direction: column; gap: 18px; position: sticky; top: 0; height: var(--rail-h, 100vh); }
 .brand { display: flex; align-items: center; gap: 10px; padding: 0 6px; }
 .brand img { width: 30px; height: 30px; }
 .brand b { display: block; font-size: 15px; }
@@ -247,7 +247,7 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
             <p class="hint">Die letzte Zeile zeigt <code>full-tokenid</code> und <code>value</code>. Beides brauchst du gleich, <code>value</code> wird nur dieses eine Mal angezeigt.</p></div></li>
           <li><div><b>Daten eintragen</b>
             <form class="grid" data-form="proxmox">
-              <label>Name <input type="text" name="name" required placeholder="zuhause" pattern="[a-z0-9][a-z0-9-]{0,30}" autocomplete="off"></label>
+              <label>Name <input type="text" name="name" required placeholder="zuhause" pattern="[a-z0-9][a-z0-9\\-]{0,30}" autocomplete="off"></label>
               <label>Adresse <input type="text" name="url" required placeholder="https://192.168.1.2:8006" autocomplete="off"></label>
               <label>Token-ID (full-tokenid) <input type="text" name="tokenId" required value="brainbox@pve!wiki" autocomplete="off"></label>
               <label>Secret (value) <input type="password" name="secret" required autocomplete="new-password"></label>

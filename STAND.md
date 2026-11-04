@@ -38,7 +38,7 @@ _Zuletzt aktualisiert: 04.11.2026_
   - Zentrale mit echtem Admin-Login: zwei Proxmox-Server, NetBird und Claude über die Formulare, Abgleich (2 Server, 9 Gäste, 6 Geräte, 7 Domains)
   - MCP über die Zentrale: Claude schreibt in „Von Claude“
   - Update-Symbol mit nachgestellter Version 1.1.0, Login-Seite „Bei Brainbox anmelden“ mit allen Anbietern
-- Live-Demo: https://claude.ai/artifact/TzQ1ou6hZu56fowZwjvbSm (wird auf den Brainbox-Look umgebaut)
+- Live-Demo im Brainbox-Look: https://claude.ai/artifact/TzQ1ou6hZu56fowZwjvbSm. Enthalten sind das Wiki mit 2 Servern und 6 Bereichen und die echte `zentrale/app.html` in einem Shadow-Root (Server hinzufügen legt Einträge an, Update lässt sich durchspielen), dazu Login und Terminal.
 - Nicht getestet: echter Proxmox-Host, echte Proxmox-/NetBird-API, claude.ai-Connector (braucht öffentliche HTTPS-Domain), echte Logins bei Google/Microsoft, echter SMTP-Server, Update von GitHub (nur lokaler Spiegel).
 
 ## Erkenntnisse (Outline v1.12.0, aus dem Quellcode)
@@ -55,7 +55,6 @@ _Zuletzt aktualisiert: 04.11.2026_
 
 ## Offen / nächste Schritte
 
-- Live-Demo auf den Brainbox-Look umbauen: echte Zentrale eingebettet, Update-Symbol, mehrere Server.
 - Philip fragen: nach `main` übernehmen und `v1.0.0` taggen?
 - Philip: Reverse-Proxy für `brainbox.morncloud.de` → `http://<IP>:3000` mit Websockets, Postfach für Login-Mails, Google-OAuth-Client und Microsoft-App-Registrierung anlegen.
 - Klären: welcher Reverse-Proxy (Nginx Proxy Manager?), welches Postfach.
