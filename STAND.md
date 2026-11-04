@@ -57,7 +57,8 @@ _Zuletzt aktualisiert: 04.11.2026_
 
 ## Offen / nächste Schritte
 
-- Philip: Branch nach `main` mergen (sonst geht der Einzeiler nicht), Reverse-Proxy für `brainbox.morncloud.de` → `http://<IP>:3000`
+- Erledigt 04.11.2026: alles nach `main` übernommen (VibeWorks-Check auf main bleibt), Einzeiler funktioniert.
+- Philip: Reverse-Proxy für `brainbox.morncloud.de` → `http://<IP>:3000`
   mit Websockets, Postfach für Login-Mails, Google-OAuth-Client und Microsoft-App-Registrierung anlegen.
 - Klären: welcher Reverse-Proxy (Nginx Proxy Manager?), welches Postfach.
 - Optional: Update-Timer, eingebautes HTTPS (z. B. Caddy) falls kein Reverse-Proxy vorhanden.
