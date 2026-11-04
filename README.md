@@ -290,7 +290,13 @@ Domain bei der Installation leer lassen, dann läuft Brainbox im Heimnetz unter 
 
 <details><summary>Geht es ohne Proxmox?</summary>
 
-Ja, auf einem frischen Debian 13 als root:
+Ja, auf einem frischen Debian 13 als root. Dort fehlt meist `curl`, also zuerst:
+
+```bash
+apt-get update && apt-get install -y curl
+```
+
+Dann:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/pmornhart/Brainbox/main/install.sh)"
