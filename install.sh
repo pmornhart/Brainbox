@@ -292,6 +292,16 @@ if [[ -f /root/brainbox-pve.env ]]; then
   fi
 fi
 
+# Anleitung im Wiki (Sammlung „Start“) und Abgleich alle 5 Minuten
+if [[ -n "$ADMIN_EMAIL" ]]; then
+  msg_info "Anleitung wird ins Wiki gelegt"
+  if $STD brainbox-connect start --quiet; then
+    msg_ok "Anleitung im Wiki (Sammlung 'Start')"
+  else
+    msg_warn "Anleitung kommt beim nächsten Abgleich (Log: ${LOG})"
+  fi
+fi
+
 msg_info "Container wird angepasst"
 cat <<'EOF' >/etc/profile.d/00_brainbox-motd.sh
 _bb_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
@@ -301,7 +311,7 @@ _bb_ver="$(sed -n 's/^BRAINBOX_VERSION=//p' /root/.brainbox 2>/dev/null)"
 _bb_core="$(sed -n 's/^OUTLINE_CORE=//p' /root/.brainbox 2>/dev/null)"
 echo -e "  \033[1;92mBrainbox ${_bb_ver}\033[m · Wiki fürs Homelab · Kern: Outline ${_bb_core}"
 echo -e "  🌐  Adresse: \033[36m${_bb_url}\033[m (im Heimnetz: http://${_bb_ip}:3000)"
-echo -e "  ⚙️   Zentrale: \033[36m${_bb_url}/zentrale\033[m (Proxmox-Server, NetBird, Claude, Anmeldung, Update)"
+echo -e "  ⚙️   Einstellungen: \033[36m${_bb_url}/settings/brainbox\033[m (Proxmox-Server, NetBird, Claude, Anmeldung, Update)"
 echo -e "  🖥️  $(hostname) · $(. /etc/os-release && echo "$PRETTY_NAME")"
 _bb_new="$(jq -r '.latest // empty' /var/lib/brainbox/update.json 2>/dev/null)"
 if [[ -n "$_bb_new" && "$_bb_new" != "$_bb_ver" && "$(printf '%s\n' "$_bb_ver" "$_bb_new" | sort -V | tail -n1)" == "$_bb_new" ]]; then
@@ -335,7 +345,8 @@ msg_ok "Aufgeräumt"
 echo
 msg_ok "${APP} ${BB_VERSION} ist installiert!"
 echo -e "${INFO}${YW}Adresse:${CL} ${BL}${WIKI_URL}${CL}"
-echo -e "${INFO}${YW}Brainbox-Zentrale:${CL} ${BL}${WIKI_URL}/zentrale${CL} (oben in der Seitenleiste)"
+echo -e "${INFO}${YW}Einstellungen:${CL} ${BL}${WIKI_URL}/settings/brainbox${CL} (oben in der Seitenleiste)"
+echo -e "${INFO}${YW}Anleitung:${CL} im Wiki in der Sammlung 'Start'"
 [[ -n "$DOMAIN" ]] && echo -e "${INFO}${YW}Reverse-Proxy:${CL} ${DOMAIN} → http://${IP}:${PORT} (Websockets an, SSL)"
 [[ "$PVE_SYNC" == "yes" ]] && echo -e "${INFO}${YW}Proxmox-Abgleich:${CL} an – Sammlung 'Proxmox' im Wiki, alle 5 Minuten aktuell"
 if [[ -n "$LOGIN_LINK" ]]; then

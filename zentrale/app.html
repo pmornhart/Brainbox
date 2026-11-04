@@ -119,6 +119,13 @@ details.form[open] { background: var(--panel2); border-radius: 10px; padding: 12
 .empty { color: var(--muted); padding: 18px; text-align: center; border: 1px dashed var(--line); border-radius: 12px; }
 .topbar { display: none; }
 .toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 9px 14px; border-radius: 8px; font-size: 14px; z-index: 30; max-width: calc(100% - 32px); }
+/* Eingebettet in die Einstellungen des Wikis: ohne eigene Seitenleiste und Überschrift */
+html.embed, html.embed body { height: auto; background: transparent; }
+.shell.embed { display: block; background: none; min-height: 0; }
+.shell.embed .rail { display: none; }
+.shell.embed main { padding: 2px 0 28px; }
+.shell.embed .wrap { max-width: none; margin: 0; }
+.shell.embed .phead .kicker, .shell.embed .phead h1 { display: none; }
 .gate { min-height: 100%; display: grid; place-items: center; padding: 24px; text-align: center; }
 .gate .box { max-width: 420px; display: grid; gap: 12px; justify-items: center; }
 
@@ -140,8 +147,19 @@ details.form[open] { background: var(--panel2); border-radius: 10px; padding: 12
 }
 </style>
 <script>
-// Gleiches Farbschema wie im Wiki: dunkel, außer dort ist „Hell“ oder „System“ eingestellt
-try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "light" || t === "system") document.documentElement.dataset.theme = t; } catch (e) { /* bleibt dunkel */ }
+// Die Zentrale wohnt in den Einstellungen des Wikis (Einstellungen → Brainbox) und wird
+// dort mit ?embed=1 eingebettet. Wer /zentrale direkt aufruft, landet auf der passenden Seite.
+(function () {
+  var q = new URLSearchParams(location.search);
+  if (q.get("embed") === "1") {
+    document.documentElement.classList.add("embed");
+    if (q.get("theme") === "light") document.documentElement.dataset.theme = "light";
+    return;
+  }
+  var map = { uebersicht: "brainbox", proxmox: "brainbox-proxmox", netbird: "brainbox-netbird", claude: "brainbox-claude", anmeldung: "brainbox-anmeldung", update: "brainbox-update" };
+  window.BRAINBOX_REDIRECT = true;
+  location.replace("/settings/" + (map[location.hash.slice(1)] || "brainbox"));
+})();
 </script>
 </head>
 <body>
@@ -151,8 +169,12 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
 (function () {
   "use strict";
   // In der Demo läuft die Zentrale in einem Shadow-Root ohne eigene Adresszeile
+  if (window.BRAINBOX_REDIRECT) return;
   const ROOT = window.BRAINBOX_ROOT || document;
   const USE_HASH = !window.BRAINBOX_ROOT;
+  // Eingebettet: im Wiki (iframe) oder in der Demo. Seitenwechsel und Links übernimmt dann das Wiki.
+  const EMBED = !!window.BRAINBOX_EMBED || document.documentElement.classList.contains("embed");
+  const NAV_OUT = window.BRAINBOX_NAVIGATE || (EMBED && window.parent !== window ? (msg) => window.parent.postMessage(msg, location.origin) : null);
   const LOGO = window.BRAINBOX_LOGO || "/zentrale/logo.svg";
   const $ = (s, r = ROOT) => r.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -192,7 +214,7 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
   };
 
   function shell(content) {
-    $("#app").innerHTML = `<div class="shell">
+    $("#app").innerHTML = `<div class="shell${EMBED ? " embed" : ""}">
       <nav class="rail" aria-label="Zentrale">
         <div class="brand"><img src="${LOGO}" alt=""><div><b>Brainbox-Zentrale</b><small>${esc(S ? `v${S.version.brainbox}` : "")}${hasUpdate() ? " · Update da" : ""}</small></div></div>
         <div class="nav">${NAV.map(([k, l]) => `<button type="button" data-go="${k}" ${view === k ? 'aria-current="page"' : ""}>${esc(l)}${navDot(k)}</button>`).join("")}</div>
@@ -202,28 +224,33 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
     </div>`;
   }
   function go(k) {
+    if (NAV_OUT && k !== view) {
+      if (k === "bereiche") { NAV_OUT({ type: "brainbox:open", href: S.sync.areasUrl || S.sync.rulesUrl || "/home" }); return; }
+      NAV_OUT({ type: "brainbox:go", page: k });
+      return;
+    }
     view = k;
     if (USE_HASH) { try { history.replaceState(null, "", `#${k}`); } catch (e) { /* egal */ } }
     render();
     const m = $("main"); if (m && m.scrollTo) m.scrollTo(0, 0); window.scrollTo(0, 0);
   }
-  window.BRAINBOX_GO = go;
+  window.BRAINBOX_GO = (k) => { view = k; render(); };
 
   // --- Seiten ---
   function pUebersicht() {
     const c = S.sync.counts;
     const ways = 1 + ["email", "google", "microsoft", "discord", "oidc"].filter((k) => S.login[k]).length + (S.login.passkeys ? 1 : 0);
     const tile = (k, dot, label, value, sub) => `<button type="button" class="tile" data-go="${k}"><span class="k"><span class="dot ${dot}"></span>${esc(label)}</span><span class="v">${esc(value)}</span><span class="s">${esc(sub)}</span></button>`;
-    return `<div><div class="kicker">${esc(S.wiki.name)} · ${esc(S.wiki.url.replace(/^https?:\/\//, ""))}</div><h1>Übersicht</h1>
+    return `<div class="phead"><div class="kicker">${esc(S.wiki.name)} · ${esc(S.wiki.url.replace(/^https?:\/\//, ""))}</div><h1>Übersicht</h1>
       <p class="lede">Hier steuerst du alles rund um dein Wiki: welche Proxmox-Server und welches NetBird drin stehen, ob Claude mitschreiben darf, wie man sich anmeldet und welche Version läuft.</p></div>
       ${hasUpdate() ? updateBanner() : ""}
       <div class="tiles">
         ${tile("proxmox", S.proxmox.length ? "ok" : "", "Proxmox-Server", String(S.proxmox.length), S.proxmox.length ? `${c.guests} VMs und Container im Wiki` : "noch keiner verbunden")}
         ${tile("netbird", S.netbird ? "ok" : "", "NetBird", S.netbird ? "verbunden" : "aus", S.netbird ? `${c.peers} Geräte im Wiki` : "Geräte und Domains ins Wiki holen")}
         ${tile("claude", S.claude.account ? "ok" : "", "Claude", S.claude.account ? "eigenes Konto" : "aus", S.claude.account ? "schreibt über MCP mit" : "Claude mitschreiben lassen")}
-        ${tile("bereiche", c.areas ? "ok" : "", "Bereiche", String(c.areas), c.areas ? "per Zuordnungsregeln sortiert" : "z. B. Minecraft-Server")}
+        ${tile("bereiche", c.areas ? "ok" : "", "Bereiche", String(S.sync.areas.filter((x) => !x.includes("/")).length), c.areas ? (c.areas > S.sync.areas.filter((x) => !x.includes("/")).length ? `mit ${c.areas - S.sync.areas.filter((x) => !x.includes("/")).length} Unterbereichen` : "per Zuordnungsregeln sortiert") : "z. B. Minecraft-Server")}
         ${tile("anmeldung", "ok", "Anmeldung", String(ways), ways === 1 ? "Weg zum Einloggen aktiv" : "Wege zum Einloggen aktiv")}
-        ${tile("update", hasUpdate() ? "warn" : "ok", "Version", `v${S.version.brainbox}`, hasUpdate() ? `Update auf v${S.update.latest} verfügbar` : `Kern: Outline ${S.version.core}`)}
+        ${tile("update", hasUpdate() ? "warn" : "ok", "Version", `v${S.version.brainbox}`, hasUpdate() ? `Update auf v${S.update.latest} verfügbar` : `Kern ${S.version.core.replace(/^v/, "")}`)}
       </div>
       <div class="card"><div class="row"><span class="dot ${S.sync.timer ? "ok" : "warn"}"></span><div class="grow"><b>Abgleich</b><div class="hint">Zuletzt ${esc(ago(S.sync.lastRun))} · ${S.sync.timer ? "läuft automatisch alle 5 Minuten" : "Zeitplan aus – startet, sobald Proxmox oder NetBird verbunden ist"}</div></div>
         <button type="button" class="btn" data-act="sync">Jetzt abgleichen</button></div><pre class="out" id="out-sync" hidden></pre></div>
@@ -237,7 +264,7 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
         <div><b>${esc(x.name)}</b><div class="meta">${esc(x.url)} · ${esc(x.tokenId)}${x.insecure ? " · Zertifikat ungeprüft" : ""}</div></div>
         <div class="acts"><button type="button" class="btn small" data-act="proxmox/test" data-name="${esc(x.name)}">Prüfen</button><button type="button" class="btn small danger" data-act="proxmox/remove" data-name="${esc(x.name)}">Entfernen</button></div>
       </div>`).join("") : `<div class="empty">Noch kein Proxmox-Server verbunden. Leg unten den ersten an.</div>`;
-    return `<div><div class="kicker">Verbindungen</div><h1>Proxmox-Server</h1>
+    return `<div class="phead"><div class="kicker">Verbindungen</div><h1>Proxmox-Server</h1>
       <p class="lede">Verbinde beliebig viele Proxmox-Server oder Cluster. Jeder bekommt im Wiki eine eigene Seite mit Nodes und Auslastung, darunter je VM und Container ein Eintrag. Neue VMs erscheinen nach spätestens 5 Minuten, gelöschte werden archiviert. Brainbox liest Proxmox nur, ändert dort nichts.</p></div>
       <div class="list">${list}</div><pre class="out" id="out-proxmox" hidden></pre>
       <div class="card"><h2>Proxmox-Server hinzufügen</h2>
@@ -260,7 +287,7 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
   }
 
   function pNetbird() {
-    return `<div><div class="kicker">Verbindungen</div><h1>NetBird</h1>
+    return `<div class="phead"><div class="kicker">Verbindungen</div><h1>NetBird</h1>
       <p class="lede">Holt alle NetBird-Geräte, Netzwerke und Domains ins Wiki und verknüpft sie mit den passenden VMs – über gleichen Namen oder gleiche IP.</p></div>
       ${S.netbird ? `<div class="server"><span class="dot ok"></span><div><b>Verbunden</b><div class="meta">${esc(S.netbird.url)} · ${S.sync.counts.peers} Geräte im Wiki</div></div>
         <div class="acts"><button type="button" class="btn small danger" data-act="netbird/remove">Trennen</button></div></div>` : ""}
@@ -279,14 +306,14 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
   }
 
   function pClaude() {
-    return `<div><div class="kicker">Verbindungen</div><h1>Claude</h1>
+    return `<div class="phead"><div class="kicker">Verbindungen</div><h1>Claude</h1>
       <p class="lede">Claude bekommt ein eigenes Konto im Wiki und verbindet sich über den eingebauten MCP-Anschluss. Was Claude schreibt, steht unter „Claude“ – du siehst immer, was von wem ist, und kannst Claude jederzeit sperren.</p></div>
       <div class="server"><span class="dot ${S.claude.account ? "ok" : ""}"></span><div><b>${S.claude.account ? "Konto eingerichtet" : "Noch nicht eingerichtet"}</b><div class="meta">${esc(S.claude.email)} · MCP: ${esc(S.claude.mcpUrl)}</div></div>
         <div class="acts"><button type="button" class="btn small primary" data-act="claude">${S.claude.account ? "Schlüssel & Anleitung zeigen" : "Claude einrichten"}</button></div></div>
       <div id="claude-result"></div><pre class="out" id="out-claude" hidden></pre>
       <div class="card"><h2>Was beim Einrichten passiert</h2>
         <ol class="steps">
-          <li><div><b>Konto „Claude“</b><p class="hint">Rolle Mitglied, eigene E-Mail. Sperren unter Einstellungen → Benutzer.</p></div></li>
+          <li><div><b>Konto „Claude“</b><p class="hint">Rolle Mitglied, eigene E-Mail. Sperren unter Einstellungen → Wiki → Mitglieder.</p></div></li>
           <li><div><b>Gemeinsame Sammlung „Von Claude“</b><p class="hint">Dort landet, was in keine andere Sammlung passt. Sammlungen, die Claude selbst anlegt, wären nur für Claude sichtbar.</p></div></li>
           <li><div><b>Anweisung für Claude</b><p class="hint">Auf Deutsch schreiben, erst suchen, dann ergänzen, keine Passwörter, Proxmox und NetBird nur unter „Notizen“.</p></div></li>
         </ol></div>`;
@@ -304,7 +331,7 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
   }
 
   function pBereiche() {
-    return `<div><div class="kicker">Ordnung</div><h1>Bereiche</h1>
+    return `<div class="phead"><div class="kicker">Ordnung</div><h1>Bereiche</h1>
       <p class="lede">Sortiert Domains, VMs und NetBird-Geräte automatisch in Bereiche – zum Beispiel alles unter <code>*.morninghosting.de</code> nach „Minecraft-Server“. Die Regeln sind eine normale Wiki-Seite, die du direkt bearbeitest.</p></div>
       <div class="card"><h2>${S.sync.counts.areas} Bereiche</h2>
         <div class="row">${S.sync.areas.length ? S.sync.areas.map((a) => `<span class="pill ok">${esc(a.replace(/\//g, " › "))}</span>`).join("") : '<span class="hint">Noch keine – sobald Proxmox oder NetBird verbunden ist, legt Brainbox die Seite „Zuordnungsregeln“ an.</span>'}</div>
@@ -331,14 +358,14 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
   function pAnmeldung() {
     const L = S.login, url = S.wiki.url;
     const f = (name, label, type = "text", ph = "") => `<label>${esc(label)} <input type="${type}" name="${name}" placeholder="${esc(ph)}" autocomplete="off"></label>`;
-    return `<div><div class="kicker">Zugang</div><h1>Anmeldung</h1>
-      <p class="lede">Welche Wege zum Einloggen es gibt. ${S.wiki.inviteRequired ? "Rein kommt nur, wen du unter Einstellungen → Benutzer eingeladen hast – egal über welchen Weg." : "Achtung: Einladungen sind nicht erforderlich – mit Google oder Microsoft könnte sich jedes Konto anmelden."}</p></div>
+    return `<div class="phead"><div class="kicker">Zugang</div><h1>Anmeldung</h1>
+      <p class="lede">Welche Wege zum Einloggen es gibt. ${S.wiki.inviteRequired ? "Rein kommt nur, wen du unter Einstellungen → Wiki → Mitglieder eingeladen hast – egal über welchen Weg." : "Achtung: Einladungen sind nicht erforderlich – mit Google oder Microsoft könnte sich jedes Konto anmelden."}</p></div>
       <div class="card">
         ${provRow("link", "Login-Link", true, "Immer da. Neuen Link unter Übersicht erstellen.")}
         ${provRow("email", "E-Mail", !!L.email, L.email ? `Login-Links per Mail über ${esc(L.email)}` : "Braucht ein Postfach zum Versenden, z. B. Gmail mit App-Passwort.",
           `<label>Postfach <select name="SMTP_PRESET"><option value="smtp.gmail.com:465">Gmail</option><option value="mail.gmx.net:587">GMX</option><option value="smtp.web.de:587">web.de</option><option value="smtp-mail.outlook.com:587">Outlook / Hotmail</option><option value="smtp.office365.com:587">Microsoft 365</option><option value="smtp.ionos.de:465">IONOS</option><option value="smtp.strato.de:465">Strato</option></select></label>
            ${f("SMTP_USERNAME", "E-Mail-Adresse", "email", "brainbox@gmail.com")}${f("SMTP_PASSWORD", "App-Passwort", "password")}${f("SMTP_FROM_EMAIL", "Absender (leer = gleiche Adresse)", "email")}`)}
-        ${provRow("passkeys", "Passkeys", L.passkeys, L.passkeys ? "An. Jeder legt seinen unter Profil → Einstellungen → Passkeys an." : "Brauchen die HTTPS-Adresse mit Domain.")}
+        ${provRow("passkeys", "Passkeys", L.passkeys, L.passkeys ? "An. Jeder legt seinen unter Einstellungen → Konto → Passkeys an." : "Brauchen die HTTPS-Adresse mit Domain.")}
         ${provRow("google", "Google", L.google, `Redirect-URI: <code>${esc(url)}/auth/google.callback</code> · Schlüssel aus der Google Cloud Console`, f("GOOGLE_CLIENT_ID", "Client-ID") + f("GOOGLE_CLIENT_SECRET", "Clientschlüssel", "password"))}
         ${provRow("microsoft", "Microsoft", L.microsoft, `Firmen- und Schulkonten · Redirect-URI: <code>${esc(url)}/auth/azure.callback</code>`, f("AZURE_CLIENT_ID", "Anwendungs-ID") + f("AZURE_CLIENT_SECRET", "Geheimer Schlüssel", "password") + f("AZURE_TENANT_ID", "Tenant (leer = alle Organisationen)"))}
         ${provRow("discord", "Discord", L.discord, `Redirect-URI: <code>${esc(url)}/auth/discord.callback</code>`, f("DISCORD_CLIENT_ID", "Client ID") + f("DISCORD_CLIENT_SECRET", "Client Secret", "password") + f("DISCORD_SERVER_ID", "Server-ID (optional)"))}
@@ -349,11 +376,11 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
 
   function pUpdate() {
     const u = S.update || {};
-    return `<div><div class="kicker">System</div><h1>Version & Update</h1>
-      <p class="lede">Brainbox hat eigene Versionen. Zu jeder Version gehört ein fest getesteter Outline-Kern.</p></div>
+    return `<div class="phead"><div class="kicker">System</div><h1>Version & Update</h1>
+      <p class="lede">Brainbox hat eigene Versionen. Zu jeder Version gehört ein fest getesteter Wiki-Kern.</p></div>
       ${hasUpdate() ? updateBanner(true) : ""}
-      <div class="tiles"><div class="tile"><span class="k">Installiert</span><span class="v">v${esc(S.version.brainbox)}</span><span class="s">Kern: Outline ${esc(S.version.core)}</span></div>
-        <div class="tile"><span class="k"><span class="dot ${hasUpdate() ? "warn" : u.latest ? "ok" : ""}"></span>Neueste Version</span><span class="v">${u.latest ? `v${esc(u.latest)}` : "–"}</span><span class="s">${u.checkedAt ? `geprüft ${esc(ago(u.checkedAt))}` : "noch nicht geprüft"}${u.error ? ` · ${esc(u.error)}` : ""}</span></div>
+      <div class="tiles"><div class="tile"><span class="k">Installiert</span><span class="v">v${esc(S.version.brainbox)}</span><span class="s">Kern ${esc(S.version.core.replace(/^v/, ""))}</span></div>
+        <div class="tile"><span class="k"><span class="dot ${hasUpdate() ? "warn" : u.latest ? "ok" : ""}"></span>Neueste Version</span><span class="v">${u.latest ? `v${esc(hasUpdate() ? u.latest : S.version.brainbox)}` : "–"}</span><span class="s">${u.checkedAt ? `geprüft ${esc(ago(u.checkedAt))}` : "noch nicht geprüft"}${u.error ? ` · ${esc(u.error)}` : ""}</span></div>
         <div class="tile"><span class="k">Automatisch</span><span class="v">alle 6 Std.</span><span class="s">sieht Brainbox selbst nach neuen Versionen</span></div></div>
       <div class="card"><h2>Aktualisieren</h2><p class="hint">Vor dem Update sichert Brainbox Datenbank und Einstellungen. Geht beim Bauen etwas schief, läuft automatisch wieder die alte Version. Das Wiki ist währenddessen 10 bis 20 Minuten nicht erreichbar.</p>
         <div class="row"><button type="button" class="btn" data-act="update/check">Nach Updates suchen</button><button type="button" class="btn primary" data-act="update/start">Update starten</button><button type="button" class="btn" data-act="update/log">Protokoll anzeigen</button></div>
@@ -367,7 +394,7 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
   }
   function updateBanner(onUpdatePage) {
     const u = S.update;
-    return `<div class="card banner"><div class="row"><span class="ico">${ICON_UPDATE}</span><div class="grow"><b>Update verfügbar: Brainbox ${esc(u.latest)}</b><div class="hint">Installiert ist ${esc(u.current)}${u.latestCore && u.latestCore !== u.currentCore ? ` · neuer Kern: Outline ${esc(u.latestCore)}` : ""}. Vorher wird alles gesichert.</div></div>
+    return `<div class="card banner"><div class="row"><span class="ico">${ICON_UPDATE}</span><div class="grow"><b>Update verfügbar: Brainbox ${esc(u.latest)}</b><div class="hint">Installiert ist ${esc(u.current)}${u.latestCore && u.latestCore !== u.currentCore ? ` · neuer Kern ${esc(u.latestCore.replace(/^v/, ""))}` : ""}. Vorher wird alles gesichert.</div></div>
       ${onUpdatePage ? `<button type="button" class="btn primary" data-act="update/start">Jetzt aktualisieren</button>` : `<button type="button" class="btn primary" data-go="update">Zum Update</button>`}</div></div>`;
   }
 
@@ -376,7 +403,7 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
 
   function gate(kind) {
     $("#app").innerHTML = `<div class="gate"><div class="box"><img src="${LOGO}" width="56" height="56" alt="">
-      <h1>${kind === "admin" ? "Nur für Admins" : "Bitte anmelden"}</h1><p class="lede">${kind === "admin" ? "Die Brainbox-Zentrale ist nur für Admins des Wikis." : "Melde dich zuerst im Wiki an, dann geht es hier weiter."}</p>
+      <h1>${kind === "admin" ? "Nur für Admins" : "Bitte anmelden"}</h1><p class="lede">${kind === "admin" ? "Diese Einstellungen sind nur für Admins des Wikis." : "Melde dich zuerst im Wiki an, dann geht es hier weiter."}</p>
       <a class="btn primary" href="/" style="text-decoration:none">${kind === "admin" ? "Zurück zum Wiki" : "Zum Wiki"}</a></div></div>`;
   }
 
@@ -406,6 +433,12 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
   function pollUpdate() { let n = 0; const t = setInterval(async () => { n++; try { const r = await api("update/log", {}); show("update", r); } catch (e) { /* während des Neustarts */ } if (n > 240) clearInterval(t); }, 5000); }
 
   ROOT.addEventListener("click", (e) => {
+    const link = e.target.closest("a[href]");
+    if (link && NAV_OUT && !link.target) {
+      const href = link.getAttribute("href");
+      if (href.startsWith("/")) { e.preventDefault(); NAV_OUT({ type: "brainbox:open", href }); return; }
+      link.target = "_blank"; link.rel = "noopener";
+    }
     const g = e.target.closest("[data-go]");
     if (g) { e.preventDefault(); go(g.dataset.go); return; }
     const c = e.target.closest("[data-copy]");

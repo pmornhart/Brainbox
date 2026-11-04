@@ -107,9 +107,9 @@ async function checkUpdate() {
   return updateState();
 }
 function updateText(u) {
-  if (u.available) return `Update verfügbar: Brainbox ${u.current} → ${u.latest}${u.latestCore && u.latestCore !== u.currentCore ? ` (Kern: Outline ${u.currentCore} → ${u.latestCore})` : ""}`;
+  if (u.available) return `Update verfügbar: Brainbox ${u.current} → ${u.latest}${u.latestCore && u.latestCore !== u.currentCore ? ` (Kern ${u.currentCore} → ${u.latestCore})` : ""}`;
   if (u.error) return `Prüfen hat nicht geklappt: ${u.error}`;
-  return `Brainbox ${u.current} ist aktuell (Kern: Outline ${u.currentCore}).`;
+  return `Brainbox ${u.current} ist aktuell (Kern ${u.currentCore}).`;
 }
 
 // --- Outline-Kern fragen (mit der Sitzung des Nutzers) -------------------------------------------
@@ -179,13 +179,45 @@ async function status(req, me) {
       },
       areas,
       rulesUrl: state.docs?.["area:rules"]?.url || null,
+      areasUrl: state.docs?.["area:overview"]?.url || null,
       overviewUrl: state.docs?.["pve:overview"]?.url || null,
+      guideUrl: state.docs?.["start:anleitung"]?.url || null,
     },
     login: {
       email: env.SMTP_HOST || env.SMTP_SERVICE || "",
       passkeys: url.startsWith("https://"),
       google: !!env.GOOGLE_CLIENT_ID, microsoft: !!env.AZURE_CLIENT_ID, discord: !!env.DISCORD_CLIENT_ID,
       oidc: env.OIDC_CLIENT_ID ? (env.OIDC_DISPLAY_NAME || "OpenID Connect") : "",
+    },
+  };
+}
+
+// --- Für die Startseite des Wikis und Kurzlinks -------------------------------------------------------
+// Kurzlinks wie /zentrale/go/anleitung führen zur passenden Wiki-Seite (vom Abgleich angelegt).
+const GO = {
+  anleitung: "start:anleitung", spickzettel: "start:spickzettel", proxmox: "pve:overview", netbird: "nb:overview",
+  domains: "nb:domains", bereiche: "area:overview", regeln: "area:rules",
+};
+function goTo(res, key) {
+  const docKey = GO[key];
+  const docUrl = docKey ? readJson(STATE_FILE, {}).docs?.[docKey]?.url : null;
+  res.writeHead(302, { Location: docUrl || "/home", "Cache-Control": "no-store" });
+  res.end();
+}
+function summary(me) {
+  const state = readJson(STATE_FILE, {});
+  const docUrl = (k) => state.docs?.[k]?.url || null;
+  const admin = me.user?.role === "admin";
+  return {
+    user: { name: me.user?.name || "", admin },
+    wiki: { name: me.team?.name || "Brainbox" },
+    version: versionInfo(),
+    update: admin ? updateState() : null,
+    lastRun: state.lastRun || null,
+    homelab: state.summary || null,
+    links: {
+      anleitung: docUrl("start:anleitung"), spickzettel: docUrl("start:spickzettel"), proxmox: docUrl("pve:overview"),
+      netbird: docUrl("nb:overview"), domains: docUrl("nb:domains"), bereiche: docUrl("area:overview"), regeln: docUrl("area:rules"),
     },
   };
 }
@@ -252,12 +284,15 @@ async function zentrale(req, res) {
     const [file, type] = STATIC[url.pathname];
     try { return send(res, 200, fs.readFileSync(file), type); } catch { return send(res, 404, "fehlt", "text/plain"); }
   }
+  if (url.pathname.startsWith("/zentrale/go/")) return goTo(res, url.pathname.slice("/zentrale/go/".length));
   if (!url.pathname.startsWith("/zentrale/api/")) return send(res, 404, { error: "Nicht gefunden" });
 
   const me = await whoami(req);
   if (!me) return send(res, 401, { error: "login" });
-  if (me.user?.role !== "admin") return send(res, 403, { error: "admin" });
   const name = url.pathname.slice("/zentrale/api/".length);
+  // Für alle Mitglieder: Zusammenfassung für die Startseite (ohne Geheimnisse)
+  if (req.method === "GET" && name === "summary") return send(res, 200, summary(me));
+  if (me.user?.role !== "admin") return send(res, 403, { error: "admin" });
   if (req.method === "GET" && name === "status") return send(res, 200, await status(req, me));
   if (req.method === "GET" && name === "update-info") return send(res, 200, updateState());
   if (req.method !== "POST" || !actions[name]) return send(res, 404, { error: "Nicht gefunden" });

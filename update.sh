@@ -223,6 +223,7 @@ if [[ "$UP_TO_DATE" == "yes" && "$FORCE" != "yes" ]]; then
   # Gleiche Version: nur Befehle, Abgleich und Zentrale auffrischen
   install_kit
   systemctl restart brainbox-zentrale >/dev/null 2>&1 || true
+  $STD brainbox-connect start --quiet || true
   msg_ok "${APP} ist aktuell: ${CUR_BB} (Kern: Outline ${CUR_CORE})"
   exit 0
 fi
@@ -294,6 +295,9 @@ msg_info "Wiki und Zentrale werden gestartet"
 systemctl start "$SERVICE"
 systemctl restart brainbox-zentrale
 msg_ok "Wiki und Zentrale gestartet"
+
+msg_info "Anleitung und Abgleich werden aufgefrischt"
+if $STD brainbox-connect start --quiet; then msg_ok "Anleitung und Abgleich aufgefrischt"; else msg_warn "Anleitung kommt beim nächsten Abgleich"; fi
 
 printf 'BRAINBOX_VERSION=%s\nOUTLINE_CORE=%s\n' "$NEW_BB" "$NEW_CORE" >"$VERSION_FILE"
 ROLLBACK_READY="no"

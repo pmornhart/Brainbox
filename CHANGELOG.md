@@ -2,6 +2,19 @@
 
 Brainbox hat eigene Versionen. Der Kern (Outline) ist je Version fest getestet und steht dabei.
 
+## 1.1.0 – 05.11.2026 · Kern: Outline v1.12.0
+
+Aufgeräumt und neu sortiert: weniger Einstellungen, mehr Überblick.
+
+- **Einstellungen neu:** drei Gruppen – *Brainbox* (Übersicht, Proxmox-Server, NetBird, Claude, Anmeldung, Version & Update), *Wiki* (Allgemein, Mitglieder, Sicherheit, Vorlagen, Export) und *Konto*. Slack, Zapier, Webhooks, GitHub, Analytics, Gruppen, Emojis, API-Schlüssel und Integrationen sind weg.
+- **Zentrale im Wiki:** die Brainbox-Zentrale steckt jetzt direkt in den Einstellungen, im Farbschema des Wikis. `/zentrale` führt dorthin.
+- **Startseite neu:** Begrüßung, dein Homelab auf einen Blick (Proxmox, NetBird, Bereiche, Version) und Schnellzugriffe
+- **Anleitung im Wiki:** neue Sammlung *Start* mit „Anleitung“ und „Spickzettel“, bei Updates aufgefrischt – eigene Änderungen bleiben
+- **Anmeldeseite** mit Brainbox-Leiste, Seitenleiste mit Konsole-Überschriften und Markierung der aktiven Seite
+- **Keine Outline-Spuren mehr:** Hilfe-Menü, Neuigkeiten, Fehler melden, App-Name, Willkommens-Mail und Freigabe-Seiten zeigen auf Brainbox
+- **Sammlungen sortiert:** Start, Bereiche, Proxmox, NetBird, Von Claude
+- **Ohne Proxmox und NetBird** läuft der Abgleich trotzdem und hält die Anleitung aktuell
+
 ## 1.0.0 – 04.11.2026 · Kern: Outline v1.12.0
 
 Erste eigenständige Brainbox.

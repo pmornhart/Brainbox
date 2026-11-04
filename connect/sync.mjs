@@ -7,6 +7,8 @@
 // Über die Wiki-Seite „Zuordnungsregeln“ (Sammlung „Bereiche“) ordnest du
 // Domains, VMs und Geräte Bereichen zu, z. B. *.morninghosting.de → Minecraft-Server.
 // Alles ab der Überschrift „Notizen“ gehört dir und bleibt erhalten.
+// Dazu pflegt er die Sammlung „Start“ mit Anleitung und Spickzettel und
+// schreibt eine Zusammenfassung für die Startseite des Wikis.
 //
 //   node sync.mjs              abgleichen
 //   node sync.mjs --test pve [NAME]  Verbindung zu Proxmox prüfen (alle oder einen Server)
@@ -62,6 +64,9 @@ function loadServers() {
 }
 const SERVERS = loadServers().map((x) => ({ ...x, url: String(x.url).replace(/\/$/, "") }));
 const NB_URL = (cfg.NETBIRD_URL || "").replace(/\/$/, "");
+const KIT_DIR = process.env.BRAINBOX_KIT_DIR || "/opt/brainbox-kit";
+// Feste Reihenfolge der Brainbox-Sammlungen in der Seitenleiste (Fractional Index)
+const COLLECTION_INDEX = { start: "a0", areas: "a1", proxmox: "a2", netbird: "a3" };
 
 // --- HTTP ----------------------------------------------------------------------
 function request(url, { method = "GET", headers = {}, body, ca, insecure = false, timeout = 30000 } = {}) {
@@ -177,7 +182,8 @@ async function ensureCollection(state, key, { name, description, color, icon }) 
     if (!list?.data || list.data.length < 100) break;
     offset += 100;
   }
-  const created = await outline("collections.create", { name, description, color, icon, permission: "read_write" });
+  const index = COLLECTION_INDEX[key];
+  const created = await outline("collections.create", { name, description, color, icon, permission: "read_write", ...(index ? { index } : {}) });
   state.collections[key] = created.data.id;
   say(`  + Sammlung „${name}“ angelegt`);
   return created.data.id;
@@ -222,6 +228,47 @@ async function writeDoc(state, key, title, autoText) {
   await outline("documents.update", { id: doc.id, title, text, publish: true });
   if (doc.hash) { state.stats.updated++; log(`  ~ ${title}`); }
   doc.hash = h;
+}
+
+// Anleitung und Spickzettel: von Brainbox geschrieben und bei neuen Fassungen aufgefrischt –
+// außer jemand hat die Seite selbst geändert, dann bleibt sie, wie sie ist.
+async function writeGuide(state, key, title, text) {
+  const doc = state.docs[key];
+  const h = hash(title + "\n" + text);
+  doc.seen = true;
+  doc.title = title;
+  if (doc.hash === h) return;
+  if (doc.written) {
+    const current = (await outline("documents.info", { id: doc.id }))?.data?.text || "";
+    if (hash(current) !== doc.written) {
+      if (!doc.kept) say(`  · „${title}“ wurde selbst bearbeitet – Brainbox lässt die Seite, wie sie ist`);
+      doc.kept = true;
+      doc.hash = h;
+      return;
+    }
+  }
+  const res = await outline("documents.update", { id: doc.id, title, text, publish: true });
+  doc.written = hash(res?.data?.text || text);
+  if (doc.hash) { state.stats.updated++; log(`  ~ ${title}`); }
+  doc.hash = h;
+}
+
+async function ensureStart(state) {
+  const read = (name) => { try { return fs.readFileSync(path.join(KIT_DIR, "wiki", name), "utf8"); } catch { return ""; } };
+  const pages = [["start:spickzettel", "Spickzettel", read("spickzettel.md")], ["start:anleitung", "Anleitung", read("anleitung.md")]];
+  if (!pages.every(([, , text]) => text)) { log("  ! Anleitung fehlt im Bausatz – übersprungen"); return; }
+  const col = await ensureCollection(state, "start", { name: "Start", description: "So funktioniert Brainbox: Anleitung und Spickzettel.", color: "#118656", icon: "bookmark" });
+  // Spickzettel zuerst anlegen, damit die Anleitung oben steht
+  for (const [key, title] of pages) await ensureDoc(state, key, title, col);
+  const url = (key, fallback) => state.docs[key]?.url || fallback;
+  const links = {
+    anleitung: url("start:anleitung", "/home"), spickzettel: url("start:spickzettel", "/home"),
+    proxmox: url("pve:overview", "/settings/brainbox-proxmox"), netbird: url("nb:overview", "/settings/brainbox-netbird"),
+    bereiche: url("area:overview", "/settings/brainbox"), regeln: url("area:rules", "/settings/brainbox"),
+  };
+  for (const [key, title, text] of pages) {
+    await writeGuide(state, key, title, text.replace(/\{\{(\w+)\}\}/g, (m, k) => links[k] || m).trim() + "\n");
+  }
 }
 
 async function archiveMissing(state, prefix) {
@@ -441,12 +488,21 @@ async function main() {
   const usePve = SERVERS.length > 0;
   const useNb = !!(NB_URL && cfg.NETBIRD_TOKEN);
   if (!cfg.OUTLINE_API_KEY) { log("Noch nicht eingerichtet: brainbox-connect proxmox bzw. brainbox-connect netbird"); return; }
-  if (!usePve && !useNb) { log("Weder Proxmox noch NetBird verbunden – nichts zu tun."); return; }
-
   const state = loadState();
   state.collections ||= {};
   state.docs ||= {};
   state.stats = { created: 0, updated: 0, archived: 0 };
+  if (!usePve && !useNb) {
+    // Noch nichts verbunden: nur Anleitung und Spickzettel pflegen
+    await ensureStart(state);
+    for (const d of Object.values(state.docs)) delete d.seen;
+    delete state.stats;
+    state.summary = { at: new Date().toISOString(), proxmox: null, netbird: null, areas: [], loose: 0 };
+    state.lastRun = new Date().toISOString();
+    saveState(state);
+    log("Weder Proxmox noch NetBird verbunden – Anleitung ist aktuell.");
+    return;
+  }
   for (const d of Object.values(state.docs)) d.seen = false;
   // Alte Einträge aus der Zeit mit nur einem Server (pve:<VMID>) dem ersten Server zuordnen
   if (usePve) {
@@ -553,7 +609,7 @@ async function main() {
     const running = guests.filter((g) => g.status === "running").length;
     const srvRows = servers.map((i) => `| ${link(state.docs[`pvesrv:${i.srv.name}`], i.srv.name)} | ${i.ok ? "🟢 erreichbar" : "🔴 nicht erreichbar"} | ${esc(i.version || "–")} | ${i.nodes.length || "–"} | ${i.guests.length} |`);
     await writeDoc(state, "pve:overview", "Proxmox – Übersicht",
-      `**${servers.length}** Proxmox-Server · **${guests.length}** VMs und Container, davon **${running}** gerade an. Weitere Server fügst du in der Brainbox-Zentrale unter **Proxmox-Server** hinzu.\n\n| Server | Status | Version | Nodes | VMs/Container |\n|---|---|---|---|---|\n${srvRows.join("\n")}\n\n### Alle VMs und Container\n\n${header}\n${guests.map((g) => row(g)).join("\n")}`);
+      `**${servers.length}** Proxmox-Server · **${guests.length}** VMs und Container, davon **${running}** gerade an. Weitere Server verbindest du unter [Einstellungen → Brainbox → Proxmox-Server](/settings/brainbox-proxmox).\n\n| Server | Status | Version | Nodes | VMs/Container |\n|---|---|---|---|---|\n${srvRows.join("\n")}\n\n### Alle VMs und Container\n\n${header}\n${guests.map((g) => row(g)).join("\n")}`);
   }
 
   if (useNb) {
@@ -626,7 +682,27 @@ async function main() {
       loose.ps.length ? `**NetBird-Geräte:** ${loose.ps.map((p) => link(state.docs[`nb:${p.id}`], p.name)).join(", ")}` : "",
     ].filter(Boolean).join("\n\n") || "Alles ist einem Bereich zugeordnet. 🎉"}`);
 
-  // 3. Verschwundene Einträge archivieren (nicht löschen)
+  // 3. Anleitung und Spickzettel (mit Links auf die Übersichten)
+  await ensureStart(state);
+
+  // 4. Zusammenfassung für die Startseite des Wikis (/zentrale/api/summary)
+  state.summary = {
+    at: new Date().toISOString(),
+    proxmox: usePve ? {
+      servers: servers.map((i) => ({
+        name: i.srv.name, ok: i.ok, version: i.version, nodes: i.nodes.length,
+        guests: i.guests.length, running: i.guests.filter((g) => g.status === "running").length,
+        url: state.docs[`pvesrv:${i.srv.name}`]?.url || null,
+      })),
+      guests: guests.length,
+      running: guests.filter((g) => g.status === "running").length,
+    } : null,
+    netbird: useNb ? { peers: nb.peers.length, online: nb.peers.filter((p) => p.connected).length, domains: nb.domains.length, networks: nb.networks.length } : null,
+    areas: summary.filter(({ a }) => !a.includes("/")).map(({ a, ds, gs, ps }) => ({ name: a, url: state.docs[`area:${a}`]?.url || null, domains: ds.length, guests: gs.length, peers: ps.length })),
+    loose: loose.ds.length + loose.gs.length + loose.ps.length,
+  };
+
+  // 5. Verschwundene Einträge archivieren (nicht löschen)
   if (usePve) { await archiveMissing(state, "pve:"); await archiveMissing(state, "pvesrv:"); }
   if (useNb) await archiveMissing(state, "nb:");
   await archiveMissing(state, "area:");
