@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Brainbox-Zentrale</title>
+<link rel="icon" href="/zentrale/logo.svg" type="image/svg+xml">
+<style>
+@font-face { font-family: "Geist"; src: url("/zentrale/fonts/Geist.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "Geist Mono"; src: url("/zentrale/fonts/GeistMono.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+/* Homelab-Konsole: dunkel als Standard (wie das Wiki), Brainbox-Grün als Akzent; Kacheln mit Statuspunkten */
+:root {
+  --bg: #0D1210; --rail: #080C0A; --panel: #131A16; --panel2: #1A231E; --line: #24302A; --fg: #E2EBE5; --muted: #8FA89A; --faint: #5E7468;
+  --accent: #4CD596; --accent-strong: #118656; --accent-ink: #06110C; --ok: #4CD596; --warn: #E0A643; --bad: #F07A6E; --code: #0A0F0C;
+  --sans: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif; --mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root[data-theme="system"] {
+  --bg: #F4F7F5; --rail: #E9EFEB; --panel: #FFFFFF; --panel2: #F1F5F2; --line: #D5E1DA; --fg: #112019; --muted: #52665B; --faint: #7D9086;
+  --accent: #118656; --accent-strong: #0E6E47; --accent-ink: #FFFFFF; --ok: #118656; --warn: #A86A08; --bad: #C2402F; --code: #EEF3F0; color-scheme: light } }
+:root[data-theme="light"] {
+  --bg: #F4F7F5; --rail: #E9EFEB; --panel: #FFFFFF; --panel2: #F1F5F2; --line: #D5E1DA; --fg: #112019; --muted: #52665B; --faint: #7D9086;
+  --accent: #118656; --accent-strong: #0E6E47; --accent-ink: #FFFFFF; --ok: #118656; --warn: #A86A08; --bad: #C2402F; --code: #EEF3F0; color-scheme: light }
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.55 var(--sans); }
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--accent); }
+code, .mono { font-family: var(--mono); font-size: 0.88em; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.shell { display: grid; grid-template-columns: 250px minmax(0, 1fr); min-height: 100%; background: linear-gradient(to right, var(--rail) 249px, var(--line) 249px 250px, transparent 250px); }
+.rail { background: var(--rail); border-right: 1px solid var(--line); padding: 18px 12px; display: flex; flex-direction: column; gap: 18px; position: sticky; top: 0; height: var(--rail-h, 100vh); }
+.brand { display: flex; align-items: center; gap: 10px; padding: 0 6px; }
+.brand img { width: 30px; height: 30px; }
+.brand b { display: block; font-size: 15px; }
+.brand small { color: var(--muted); font: 12px var(--mono); }
+.nav { display: grid; gap: 2px; }
+.nav button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: 0; padding: 8px 10px; border-radius: 8px; cursor: pointer; color: var(--muted); }
+.nav button:hover { background: var(--panel); color: var(--fg); }
+.nav button[aria-current="page"] { background: var(--panel2); color: var(--fg); font-weight: 500; }
+.nav .dot { margin-left: auto; }
+.rail .foot { margin-top: auto; display: grid; gap: 8px; }
+.back { display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--fg); background: var(--panel); border: 1px solid var(--line); padding: 8px 10px; border-radius: 8px; font-size: 14px; }
+
+main { min-width: 0; padding: 28px 32px 80px; }
+.wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 22px; }
+.kicker { font: 500 12px var(--mono); color: var(--accent); letter-spacing: .08em; text-transform: uppercase; }
+h1 { font-size: 1.9rem; line-height: 1.15; margin: 4px 0 6px; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font-size: 1.15rem; margin: 0 0 10px; }
+.lede { color: var(--muted); margin: 0; max-width: 68ch; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 4px; text-align: left; cursor: pointer; }
+.tile:hover { border-color: var(--faint); }
+.tile .k { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.tile .v { font-size: 1.45rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tile .s { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; display: grid; gap: 12px; }
+.card.soft { background: transparent; border-style: dashed; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.row .grow { flex: 1 1 220px; min-width: 0; }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; background: var(--faint); }
+.dot.ok { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
+.dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
+.pill { font: 12px var(--mono); padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.pill.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+.pill.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+
+.btn { border: 1px solid var(--line); background: var(--panel2); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 500; white-space: nowrap; }
+.btn:hover { border-color: var(--faint); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.danger { color: var(--bad); }
+.btn[disabled] { opacity: .55; cursor: progress; }
+.btn.small { padding: 5px 10px; font-size: 13px; }
+
+.steps { counter-reset: s; display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.steps > li { counter-increment: s; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; }
+.steps > li::before { content: counter(s); width: 24px; height: 24px; border-radius: 50%; background: var(--panel2); border: 1px solid var(--line); display: grid; place-items: center; font: 600 12px var(--mono); color: var(--accent); }
+.steps p { margin: 2px 0 6px; }
+
+.cmd { position: relative; background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: 10px 70px 10px 12px; font: 13px/1.6 var(--mono); overflow-x: auto; white-space: pre; }
+.cmd button { position: absolute; top: 6px; right: 6px; }
+
+form.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
+form.grid .full { grid-column: 1 / -1; }
+label { display: grid; gap: 5px; font-size: 13px; color: var(--muted); }
+input[type=text], input[type=url], input[type=email], input[type=password], select { width: 100%; background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; color: var(--fg); }
+input:focus, select:focus { border-color: var(--accent); outline: none; }
+.check { display: flex; align-items: center; gap: 8px; color: var(--fg); font-size: 14px; }
+.hint { color: var(--muted); font-size: 13px; margin: 0; }
+.out { background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: 12px; font: 12.5px/1.6 var(--mono); white-space: pre-wrap; max-height: 320px; overflow: auto; margin: 0; }
+.out.ok { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); }
+.out.bad { border-color: color-mix(in srgb, var(--bad) 55%, var(--line)); }
+
+.list { display: grid; gap: 10px; }
+.server { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.server b { font-size: 1.02rem; }
+.server .meta { color: var(--muted); font: 12.5px var(--mono); overflow-wrap: anywhere; }
+.server .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+.prov { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.prov:last-child { border-bottom: 0; }
+.prov b { display: flex; align-items: center; gap: 8px; }
+.prov small { color: var(--muted); display: block; }
+details.form > summary { list-style: none; cursor: pointer; }
+details.form > summary::-webkit-details-marker { display: none; }
+details.form[open] { background: var(--panel2); border-radius: 10px; padding: 12px; margin-top: 6px; }
+
+.secret { display: flex; gap: 8px; align-items: center; background: var(--code); border: 1px dashed var(--warn); border-radius: 8px; padding: 8px 10px; font: 13px var(--mono); overflow-wrap: anywhere; }
+.upd { display: inline-flex; align-items: center; gap: 4px; font: 600 11.5px var(--mono); color: var(--accent-ink); background: var(--accent); border-radius: 999px; padding: 2px 8px 2px 6px; white-space: nowrap; }
+.upd svg { width: 13px; height: 13px; }
+.nav .upd { margin-left: auto; }
+.banner { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, var(--panel)), var(--panel) 60%); }
+.banner .ico { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); flex: none; }
+.banner .ico svg { width: 20px; height: 20px; }
+.empty { color: var(--muted); padding: 18px; text-align: center; border: 1px dashed var(--line); border-radius: 12px; }
+.topbar { display: none; }
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 9px 14px; border-radius: 8px; font-size: 14px; z-index: 30; max-width: calc(100% - 32px); }
+.gate { min-height: 100%; display: grid; place-items: center; padding: 24px; text-align: center; }
+.gate .box { max-width: 420px; display: grid; gap: 12px; justify-items: center; }
+
+@media (max-width: 860px) {
+  .shell { grid-template-columns: minmax(0, 1fr); background: none; }
+  .rail { position: static; height: auto; padding: 12px; gap: 10px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .nav { grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; gap: 4px; padding-bottom: 2px; }
+  .nav button { padding: 7px 10px; white-space: nowrap; }
+  .rail { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .rail .nav { grid-column: 1 / -1; grid-row: 2; }
+  .rail .foot { display: block; margin: 0; grid-column: 2; grid-row: 1; }
+  .rail .foot .hint { display: none; }
+  .back { padding: 6px 10px; font-size: 13px; }
+  main { padding: 18px 16px 70px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  form.grid { grid-template-columns: minmax(0, 1fr); }
+  .server { grid-template-columns: auto minmax(0, 1fr); }
+  .server .acts { grid-column: 1 / -1; justify-content: flex-start; }
+  h1 { font-size: 1.55rem; }
+}
+</style>
+<script>
+// Gleiches Farbschema wie im Wiki: dunkel, außer dort ist „Hell“ oder „System“ eingestellt
+try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "light" || t === "system") document.documentElement.dataset.theme = t; } catch (e) { /* bleibt dunkel */ }
+</script>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast" hidden></div>
+<script>
+(function () {
+  "use strict";
+  // In der Demo läuft die Zentrale in einem Shadow-Root ohne eigene Adresszeile
+  const ROOT = window.BRAINBOX_ROOT || document;
+  const USE_HASH = !window.BRAINBOX_ROOT;
+  const LOGO = window.BRAINBOX_LOGO || "/zentrale/logo.svg";
+  const $ = (s, r = ROOT) => r.querySelector(s);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  let S = null; // Status
+  let view = USE_HASH ? (location.hash || "#uebersicht").slice(1) : "uebersicht";
+
+  // --- Verbindung zum Brainbox-Dienst (in der Demo: nachgestellt) ---
+  async function api(name, body) {
+    if (window.BRAINBOX_MOCK) return window.BRAINBOX_MOCK(name, body);
+    const opt = body === undefined ? { headers: { Accept: "application/json" } } :
+      { method: "POST", headers: { "Content-Type": "application/json", "X-Brainbox": "1" }, body: JSON.stringify(body) };
+    const r = await fetch(`/zentrale/api/${name}`, { credentials: "same-origin", ...opt });
+    if (r.status === 401) throw Object.assign(new Error("login"), { gate: "login" });
+    if (r.status === 403) throw Object.assign(new Error("admin"), { gate: "admin" });
+    return r.json();
+  }
+  let tt;
+  function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => (t.hidden = true), 2800); }
+  function copy(text, btn) {
+    const done = () => { if (btn) { const o = btn.textContent; btn.textContent = "Kopiert"; setTimeout(() => (btn.textContent = o), 1500); } };
+    try { navigator.clipboard.writeText(text).then(done, () => toast("Bitte markieren und kopieren")); } catch (e) { toast("Bitte markieren und kopieren"); }
+  }
+  const ago = (iso) => { if (!iso) return "noch nie"; const m = Math.round((Date.now() - new Date(iso)) / 60000); return m < 1 ? "gerade eben" : m < 60 ? `vor ${m} Min.` : m < 1440 ? `vor ${Math.round(m / 60)} Std.` : new Date(iso).toLocaleString("de-DE"); };
+  const ICON_UPDATE = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1ZM5 16a1 1 0 0 1 1 1v2h12v-2a1 1 0 1 1 2 0v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1Z"/></svg>';
+  const hasUpdate = () => !!(S && S.update && S.update.available);
+  const cmd = (text) => `<div class="cmd">${esc(text)}<button type="button" class="btn small" data-copy="${esc(text)}">Kopieren</button></div>`;
+
+  const NAV = [
+    ["uebersicht", "Übersicht"], ["proxmox", "Proxmox-Server"], ["netbird", "NetBird"], ["claude", "Claude"],
+    ["bereiche", "Bereiche"], ["anmeldung", "Anmeldung"], ["update", "Version & Update"],
+  ];
+  const navDot = (k) => {
+    if (!S) return "";
+    if (k === "update") return hasUpdate() ? `<span class="upd" title="Update verfügbar">${ICON_UPDATE}${esc(S.update.latest)}</span>` : "";
+    const st = { proxmox: S.proxmox.length ? "ok" : "", netbird: S.netbird ? "ok" : "", claude: S.claude.account ? "ok" : "", bereiche: S.sync.counts.areas ? "ok" : "" }[k];
+    return st === undefined ? "" : `<span class="dot ${st}"></span>`;
+  };
+
+  function shell(content) {
+    $("#app").innerHTML = `<div class="shell">
+      <nav class="rail" aria-label="Zentrale">
+        <div class="brand"><img src="${LOGO}" alt=""><div><b>Brainbox-Zentrale</b><small>${esc(S ? `v${S.version.brainbox}` : "")}${hasUpdate() ? " · Update da" : ""}</small></div></div>
+        <div class="nav">${NAV.map(([k, l]) => `<button type="button" data-go="${k}" ${view === k ? 'aria-current="page"' : ""}>${esc(l)}${navDot(k)}</button>`).join("")}</div>
+        <div class="foot"><a class="back" href="/" data-wiki>← Zum Wiki</a><span class="hint">Angemeldet als ${esc(S?.user?.name || "")}</span></div>
+      </nav>
+      <main><div class="wrap" id="page">${content}</div></main>
+    </div>`;
+  }
+  function go(k) {
+    view = k;
+    if (USE_HASH) { try { history.replaceState(null, "", `#${k}`); } catch (e) { /* egal */ } }
+    render();
+    const m = $("main"); if (m && m.scrollTo) m.scrollTo(0, 0); window.scrollTo(0, 0);
+  }
+  window.BRAINBOX_GO = go;
+
+  // --- Seiten ---
+  function pUebersicht() {
+    const c = S.sync.counts;
+    const ways = 1 + ["email", "google", "microsoft", "discord", "oidc"].filter((k) => S.login[k]).length + (S.login.passkeys ? 1 : 0);
+    const tile = (k, dot, label, value, sub) => `<button type="button" class="tile" data-go="${k}"><span class="k"><span class="dot ${dot}"></span>${esc(label)}</span><span class="v">${esc(value)}</span><span class="s">${esc(sub)}</span></button>`;
+    return `<div><div class="kicker">${esc(S.wiki.name)} · ${esc(S.wiki.url.replace(/^https?:\/\//, ""))}</div><h1>Übersicht</h1>
+      <p class="lede">Hier steuerst du alles rund um dein Wiki: welche Proxmox-Server und welches NetBird drin stehen, ob Claude mitschreiben darf, wie man sich anmeldet und welche Version läuft.</p></div>
+      ${hasUpdate() ? updateBanner() : ""}
+      <div class="tiles">
+        ${tile("proxmox", S.proxmox.length ? "ok" : "", "Proxmox-Server", String(S.proxmox.length), S.proxmox.length ? `${c.guests} VMs und Container im Wiki` : "noch keiner verbunden")}
+        ${tile("netbird", S.netbird ? "ok" : "", "NetBird", S.netbird ? "verbunden" : "aus", S.netbird ? `${c.peers} Geräte im Wiki` : "Geräte und Domains ins Wiki holen")}
+        ${tile("claude", S.claude.account ? "ok" : "", "Claude", S.claude.account ? "eigenes Konto" : "aus", S.claude.account ? "schreibt über MCP mit" : "Claude mitschreiben lassen")}
+        ${tile("bereiche", c.areas ? "ok" : "", "Bereiche", String(c.areas), c.areas ? "per Zuordnungsregeln sortiert" : "z. B. Minecraft-Server")}
+        ${tile("anmeldung", "ok", "Anmeldung", String(ways), ways === 1 ? "Weg zum Einloggen aktiv" : "Wege zum Einloggen aktiv")}
+        ${tile("update", hasUpdate() ? "warn" : "ok", "Version", `v${S.version.brainbox}`, hasUpdate() ? `Update auf v${S.update.latest} verfügbar` : `Kern: Outline ${S.version.core}`)}
+      </div>
+      <div class="card"><div class="row"><span class="dot ${S.sync.timer ? "ok" : "warn"}"></span><div class="grow"><b>Abgleich</b><div class="hint">Zuletzt ${esc(ago(S.sync.lastRun))} · ${S.sync.timer ? "läuft automatisch alle 5 Minuten" : "Zeitplan aus – startet, sobald Proxmox oder NetBird verbunden ist"}</div></div>
+        <button type="button" class="btn" data-act="sync">Jetzt abgleichen</button></div><pre class="out" id="out-sync" hidden></pre></div>
+      <div class="card"><h2>Login-Link</h2><p class="hint">Ein Link, der einmal anmeldet und 60 Minuten gilt – für dich auf einem neuen Gerät oder für jemanden, den du eingeladen hast.</p>
+        <form class="row" data-form="link"><input class="grow" type="email" name="email" placeholder="E-Mail (leer = du als Admin)" aria-label="E-Mail für den Login-Link"><button class="btn primary" type="submit">Link erstellen</button></form><pre class="out" id="out-link" hidden></pre></div>`;
+  }
+
+  function pProxmox() {
+    const list = S.proxmox.length ? S.proxmox.map((x) => `<div class="server">
+        <span class="dot ok"></span>
+        <div><b>${esc(x.name)}</b><div class="meta">${esc(x.url)} · ${esc(x.tokenId)}${x.insecure ? " · Zertifikat ungeprüft" : ""}</div></div>
+        <div class="acts"><button type="button" class="btn small" data-act="proxmox/test" data-name="${esc(x.name)}">Prüfen</button><button type="button" class="btn small danger" data-act="proxmox/remove" data-name="${esc(x.name)}">Entfernen</button></div>
+      </div>`).join("") : `<div class="empty">Noch kein Proxmox-Server verbunden. Leg unten den ersten an.</div>`;
+    return `<div><div class="kicker">Verbindungen</div><h1>Proxmox-Server</h1>
+      <p class="lede">Verbinde beliebig viele Proxmox-Server oder Cluster. Jeder bekommt im Wiki eine eigene Seite mit Nodes und Auslastung, darunter je VM und Container ein Eintrag. Neue VMs erscheinen nach spätestens 5 Minuten, gelöschte werden archiviert. Brainbox liest Proxmox nur, ändert dort nichts.</p></div>
+      <div class="list">${list}</div><pre class="out" id="out-proxmox" hidden></pre>
+      <div class="card"><h2>Proxmox-Server hinzufügen</h2>
+        <ol class="steps">
+          <li><div><b>Lesezugang auf dem neuen Server anlegen</b><p class="hint">In der Shell des Proxmox-Hosts (Datacenter → Node → Shell) einmal ausführen. Der Nutzer darf nur lesen (Rolle PVEAuditor).</p>
+            ${cmd("pveum user add brainbox@pve\npveum acl modify / --users brainbox@pve --roles PVEAuditor\npveum user token add brainbox@pve wiki --privsep 0")}
+            <p class="hint">Die letzte Zeile zeigt <code>full-tokenid</code> und <code>value</code>. Beides brauchst du gleich, <code>value</code> wird nur dieses eine Mal angezeigt.</p></div></li>
+          <li><div><b>Daten eintragen</b>
+            <form class="grid" data-form="proxmox">
+              <label>Name <input type="text" name="name" required placeholder="zuhause" pattern="[a-z0-9][a-z0-9\\-]{0,30}" autocomplete="off"></label>
+              <label>Adresse <input type="text" name="url" required placeholder="https://192.168.1.2:8006" autocomplete="off"></label>
+              <label>Token-ID (full-tokenid) <input type="text" name="tokenId" required value="brainbox@pve!wiki" autocomplete="off"></label>
+              <label>Secret (value) <input type="password" name="secret" required autocomplete="new-password"></label>
+              <label class="check full"><input type="checkbox" name="insecure" checked> Zertifikat nicht prüfen (Proxmox nutzt meist ein selbst ausgestelltes – im Heimnetz üblich)</label>
+              <div class="full row"><button class="btn primary" type="submit">Verbinden und prüfen</button><span class="hint">Brainbox testet den Zugang, bevor es speichert.</span></div>
+            </form></div></li>
+          <li><div><b>Fertig</b><p class="hint">Im Wiki steht der Server unter <b>Proxmox → ${esc("<Name> (Proxmox-Server)")}</b>. Mit Tags und Zuordnungsregeln landen seine VMs auch in deinen <a href="#bereiche" data-go="bereiche">Bereichen</a>.</p></div></li>
+        </ol></div>
+      <p class="hint">Im Terminal geht dasselbe mit <code>brainbox-connect proxmox add NAME URL TOKEN-ID SECRET --insecure</code>.</p>`;
+  }
+
+  function pNetbird() {
+    return `<div><div class="kicker">Verbindungen</div><h1>NetBird</h1>
+      <p class="lede">Holt alle NetBird-Geräte, Netzwerke und Domains ins Wiki und verknüpft sie mit den passenden VMs – über gleichen Namen oder gleiche IP.</p></div>
+      ${S.netbird ? `<div class="server"><span class="dot ok"></span><div><b>Verbunden</b><div class="meta">${esc(S.netbird.url)} · ${S.sync.counts.peers} Geräte im Wiki</div></div>
+        <div class="acts"><button type="button" class="btn small danger" data-act="netbird/remove">Trennen</button></div></div>` : ""}
+      <pre class="out" id="out-netbird" hidden></pre>
+      <div class="card"><h2>${S.netbird ? "Zugang ändern" : "NetBird verbinden"}</h2>
+        <ol class="steps">
+          <li><div><b>Access Token anlegen</b><p class="hint">Im NetBird-Dashboard unter <b>Team → Service Users</b> einen Nutzer anlegen (Rolle „User“ reicht zum Lesen) und dort ein Token erstellen. Alternativ: eigenes Profil → Personal Access Tokens.</p></div></li>
+          <li><div><b>Eintragen</b>
+            <form class="grid" data-form="netbird">
+              <label>API-Adresse <input type="text" name="url" required value="${esc(S.netbird?.url || "https://api.netbird.io")}"></label>
+              <label>Access Token <input type="password" name="token" required autocomplete="new-password"></label>
+              <p class="hint full">NetBird Cloud: <code>https://api.netbird.io</code>. Selbst gehostet: die Adresse deines Management-Servers.</p>
+              <div class="full"><button class="btn primary" type="submit">Verbinden und prüfen</button></div>
+            </form></div></li>
+        </ol></div>`;
+  }
+
+  function pClaude() {
+    return `<div><div class="kicker">Verbindungen</div><h1>Claude</h1>
+      <p class="lede">Claude bekommt ein eigenes Konto im Wiki und verbindet sich über den eingebauten MCP-Anschluss. Was Claude schreibt, steht unter „Claude“ – du siehst immer, was von wem ist, und kannst Claude jederzeit sperren.</p></div>
+      <div class="server"><span class="dot ${S.claude.account ? "ok" : ""}"></span><div><b>${S.claude.account ? "Konto eingerichtet" : "Noch nicht eingerichtet"}</b><div class="meta">${esc(S.claude.email)} · MCP: ${esc(S.claude.mcpUrl)}</div></div>
+        <div class="acts"><button type="button" class="btn small primary" data-act="claude">${S.claude.account ? "Schlüssel & Anleitung zeigen" : "Claude einrichten"}</button></div></div>
+      <div id="claude-result"></div><pre class="out" id="out-claude" hidden></pre>
+      <div class="card"><h2>Was beim Einrichten passiert</h2>
+        <ol class="steps">
+          <li><div><b>Konto „Claude“</b><p class="hint">Rolle Mitglied, eigene E-Mail. Sperren unter Einstellungen → Benutzer.</p></div></li>
+          <li><div><b>Gemeinsame Sammlung „Von Claude“</b><p class="hint">Dort landet, was in keine andere Sammlung passt. Sammlungen, die Claude selbst anlegt, wären nur für Claude sichtbar.</p></div></li>
+          <li><div><b>Anweisung für Claude</b><p class="hint">Auf Deutsch schreiben, erst suchen, dann ergänzen, keine Passwörter, Proxmox und NetBird nur unter „Notizen“.</p></div></li>
+        </ol></div>`;
+  }
+
+  function claudeResult(d) {
+    return `<div class="card"><h2>So verbindest du Claude</h2>
+      <ol class="steps">
+        <li><div><b>Claude-App</b> (claude.ai, Handy, Desktop)<p class="hint">Im Browser abmelden oder ein privates Fenster öffnen und mit diesem Link als Claude anmelden (einmal gültig, 60 Minuten):</p>${cmd(d.loginLink || "")}
+          <p class="hint">Dann in Claude: Einstellungen → Connectors → Benutzerdefinierten Connector hinzufügen → Name „Brainbox“, URL:</p>${cmd(d.mcpUrl)}<p class="hint">„Verbinden“ und im Anmeldefenster „Zulassen“. Braucht die HTTPS-Adresse aus dem Internet.</p></div></li>
+        <li><div><b>Claude Code</b>${cmd(`claude mcp add --transport http brainbox ${d.mcpUrl} --header "Authorization: Bearer ${d.apiKey}"`)}</div></li>
+      </ol>
+      <div class="secret">🔑 <span class="grow">Schlüssel: ${esc(d.apiKey.slice(0, 12))}…</span><button type="button" class="btn small" data-copy="${esc(d.apiKey)}">Kopieren</button></div>
+      <p class="hint">Den Schlüssel geheim halten. Er steht nur hier und im Container, nie im Wiki.</p></div>`;
+  }
+
+  function pBereiche() {
+    return `<div><div class="kicker">Ordnung</div><h1>Bereiche</h1>
+      <p class="lede">Sortiert Domains, VMs und NetBird-Geräte automatisch in Bereiche – zum Beispiel alles unter <code>*.morninghosting.de</code> nach „Minecraft-Server“. Die Regeln sind eine normale Wiki-Seite, die du direkt bearbeitest.</p></div>
+      <div class="card"><h2>${S.sync.counts.areas} Bereiche</h2>
+        <div class="row">${S.sync.areas.length ? S.sync.areas.map((a) => `<span class="pill ok">${esc(a.replace(/\//g, " › "))}</span>`).join("") : '<span class="hint">Noch keine – sobald Proxmox oder NetBird verbunden ist, legt Brainbox die Seite „Zuordnungsregeln“ an.</span>'}</div>
+        <div class="row">${S.sync.rulesUrl ? `<a class="btn primary" href="${esc(S.sync.rulesUrl)}" style="text-decoration:none">Zuordnungsregeln öffnen</a>` : ""}<button type="button" class="btn" data-act="sync">Jetzt abgleichen</button></div>
+        <pre class="out" id="out-sync" hidden></pre></div>
+      <div class="card"><h2>So schreibst du Regeln</h2>
+        <p class="hint">Eine Zeile pro Regel in der Tabelle auf der Seite „Zuordnungsregeln“. Die erste passende gewinnt – Genaues nach oben, Allgemeines nach unten.</p>
+        <div class="cmd">| Muster                     | Bereich                   |
+| survival.morninghosting.de | Minecraft-Server/Survival |
+| *.morninghosting.de        | Minecraft-Server          |
+| tag:minecraft              | Minecraft-Server          |
+| gruppe:Server              | Homelab                   |</div>
+        <ul class="hint" style="margin:0;padding-left:18px">
+          <li><code>*.domain.de</code> – alle Domains darunter · <code>name:mc-*</code> – VM-/Gerätenamen · <code>tag:…</code> – Proxmox-Tags · <code>gruppe:…</code> – NetBird-Gruppen</li>
+          <li><code>A/B</code> legt Unterbereiche an. Eine VM erbt den Bereich ihrer Domain, ein Gerät den seiner VM.</li>
+        </ul></div>`;
+  }
+
+  function provRow(key, name, on, sub, fields) {
+    return `<div class="prov"><div><b><span class="dot ${on ? "ok" : ""}"></span>${esc(name)}</b><small>${sub}</small></div><span class="pill ${on ? "ok" : ""}">${on ? "an" : "aus"}</span>
+      ${fields ? `<details class="form" style="grid-column:1/-1"><summary class="hint">▸ ${on ? "Ändern oder ausschalten" : "Einrichten"}</summary>
+        <form class="grid" data-form="login" style="margin-top:10px">${fields}<div class="full row"><button class="btn primary" type="submit">Speichern und neu starten</button>${on ? `<button class="btn danger" type="button" data-clear="${esc(key)}">Ausschalten</button>` : ""}</div></form></details>` : ""}</div>`;
+  }
+  function pAnmeldung() {
+    const L = S.login, url = S.wiki.url;
+    const f = (name, label, type = "text", ph = "") => `<label>${esc(label)} <input type="${type}" name="${name}" placeholder="${esc(ph)}" autocomplete="off"></label>`;
+    return `<div><div class="kicker">Zugang</div><h1>Anmeldung</h1>
+      <p class="lede">Welche Wege zum Einloggen es gibt. ${S.wiki.inviteRequired ? "Rein kommt nur, wen du unter Einstellungen → Benutzer eingeladen hast – egal über welchen Weg." : "Achtung: Einladungen sind nicht erforderlich – mit Google oder Microsoft könnte sich jedes Konto anmelden."}</p></div>
+      <div class="card">
+        ${provRow("link", "Login-Link", true, "Immer da. Neuen Link unter Übersicht erstellen.")}
+        ${provRow("email", "E-Mail", !!L.email, L.email ? `Login-Links per Mail über ${esc(L.email)}` : "Braucht ein Postfach zum Versenden, z. B. Gmail mit App-Passwort.",
+          `<label>Postfach <select name="SMTP_PRESET"><option value="smtp.gmail.com:465">Gmail</option><option value="mail.gmx.net:587">GMX</option><option value="smtp.web.de:587">web.de</option><option value="smtp-mail.outlook.com:587">Outlook / Hotmail</option><option value="smtp.office365.com:587">Microsoft 365</option><option value="smtp.ionos.de:465">IONOS</option><option value="smtp.strato.de:465">Strato</option></select></label>
+           ${f("SMTP_USERNAME", "E-Mail-Adresse", "email", "brainbox@gmail.com")}${f("SMTP_PASSWORD", "App-Passwort", "password")}${f("SMTP_FROM_EMAIL", "Absender (leer = gleiche Adresse)", "email")}`)}
+        ${provRow("passkeys", "Passkeys", L.passkeys, L.passkeys ? "An. Jeder legt seinen unter Profil → Einstellungen → Passkeys an." : "Brauchen die HTTPS-Adresse mit Domain.")}
+        ${provRow("google", "Google", L.google, `Redirect-URI: <code>${esc(url)}/auth/google.callback</code> · Schlüssel aus der Google Cloud Console`, f("GOOGLE_CLIENT_ID", "Client-ID") + f("GOOGLE_CLIENT_SECRET", "Clientschlüssel", "password"))}
+        ${provRow("microsoft", "Microsoft", L.microsoft, `Firmen- und Schulkonten · Redirect-URI: <code>${esc(url)}/auth/azure.callback</code>`, f("AZURE_CLIENT_ID", "Anwendungs-ID") + f("AZURE_CLIENT_SECRET", "Geheimer Schlüssel", "password") + f("AZURE_TENANT_ID", "Tenant (leer = alle Organisationen)"))}
+        ${provRow("discord", "Discord", L.discord, `Redirect-URI: <code>${esc(url)}/auth/discord.callback</code>`, f("DISCORD_CLIENT_ID", "Client ID") + f("DISCORD_CLIENT_SECRET", "Client Secret", "password") + f("DISCORD_SERVER_ID", "Server-ID (optional)"))}
+        ${provRow("oidc", L.oidc || "Eigener Login-Dienst (OIDC)", !!L.oidc, `Pocket ID, Authentik, Keycloak … · Redirect-URI: <code>${esc(url)}/auth/oidc.callback</code>`, f("OIDC_DISPLAY_NAME", "Name auf dem Knopf", "text", "Pocket ID") + f("OIDC_ISSUER_URL", "Issuer-URL") + f("OIDC_CLIENT_ID", "Client-ID") + f("OIDC_CLIENT_SECRET", "Client-Secret", "password"))}
+      </div><pre class="out" id="out-login" hidden></pre>
+      <p class="hint">Nach dem Speichern startet das Wiki neu (etwa eine Minute). Im Terminal geht dasselbe mit <code>brainbox-login</code>.</p>`;
+  }
+
+  function pUpdate() {
+    const u = S.update || {};
+    return `<div><div class="kicker">System</div><h1>Version & Update</h1>
+      <p class="lede">Brainbox hat eigene Versionen. Zu jeder Version gehört ein fest getesteter Outline-Kern.</p></div>
+      ${hasUpdate() ? updateBanner(true) : ""}
+      <div class="tiles"><div class="tile"><span class="k">Installiert</span><span class="v">v${esc(S.version.brainbox)}</span><span class="s">Kern: Outline ${esc(S.version.core)}</span></div>
+        <div class="tile"><span class="k"><span class="dot ${hasUpdate() ? "warn" : u.latest ? "ok" : ""}"></span>Neueste Version</span><span class="v">${u.latest ? `v${esc(u.latest)}` : "–"}</span><span class="s">${u.checkedAt ? `geprüft ${esc(ago(u.checkedAt))}` : "noch nicht geprüft"}${u.error ? ` · ${esc(u.error)}` : ""}</span></div>
+        <div class="tile"><span class="k">Automatisch</span><span class="v">alle 6 Std.</span><span class="s">sieht Brainbox selbst nach neuen Versionen</span></div></div>
+      <div class="card"><h2>Aktualisieren</h2><p class="hint">Vor dem Update sichert Brainbox Datenbank und Einstellungen. Geht beim Bauen etwas schief, läuft automatisch wieder die alte Version. Das Wiki ist währenddessen 10 bis 20 Minuten nicht erreichbar.</p>
+        <div class="row"><button type="button" class="btn" data-act="update/check">Nach Updates suchen</button><button type="button" class="btn primary" data-act="update/start">Update starten</button><button type="button" class="btn" data-act="update/log">Protokoll anzeigen</button></div>
+        <pre class="out" id="out-update" hidden></pre></div>
+      <div class="card"><h2>Im Terminal</h2>
+        <ol class="steps">
+          <li><div><b>Im Container</b> (Proxmox → Container → Konsole)<p class="hint">Aktualisieren, nur nachsehen oder neu bauen:</p>${cmd("update")}<p class="hint" style="margin-top:6px"><code>update --check</code> nur nachsehen · <code>update --force</code> neu bauen · <code>brainbox-update</code> geht genauso</p></div></li>
+          <li><div><b>Vom Proxmox-Host aus</b><p class="hint">Ohne in den Container zu wechseln – <code>${esc(S.ctid || "<CTID>")}</code> ist die Nummer des Containers:</p>${cmd(`pct exec ${S.ctid || "<CTID>"} -- update`)}</div></li>
+        </ol></div>
+      <p class="hint">Was sich geändert hat: <a href="https://github.com/pmornhart/Brainbox/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Änderungen (CHANGELOG)</a></p>`;
+  }
+  function updateBanner(onUpdatePage) {
+    const u = S.update;
+    return `<div class="card banner"><div class="row"><span class="ico">${ICON_UPDATE}</span><div class="grow"><b>Update verfügbar: Brainbox ${esc(u.latest)}</b><div class="hint">Installiert ist ${esc(u.current)}${u.latestCore && u.latestCore !== u.currentCore ? ` · neuer Kern: Outline ${esc(u.latestCore)}` : ""}. Vorher wird alles gesichert.</div></div>
+      ${onUpdatePage ? `<button type="button" class="btn primary" data-act="update/start">Jetzt aktualisieren</button>` : `<button type="button" class="btn primary" data-go="update">Zum Update</button>`}</div></div>`;
+  }
+
+  const PAGES = { uebersicht: pUebersicht, proxmox: pProxmox, netbird: pNetbird, claude: pClaude, bereiche: pBereiche, anmeldung: pAnmeldung, update: pUpdate };
+  function render() { if (!PAGES[view]) view = "uebersicht"; shell(PAGES[view]()); }
+
+  function gate(kind) {
+    $("#app").innerHTML = `<div class="gate"><div class="box"><img src="${LOGO}" width="56" height="56" alt="">
+      <h1>${kind === "admin" ? "Nur für Admins" : "Bitte anmelden"}</h1><p class="lede">${kind === "admin" ? "Die Brainbox-Zentrale ist nur für Admins des Wikis." : "Melde dich zuerst im Wiki an, dann geht es hier weiter."}</p>
+      <a class="btn primary" href="/" style="text-decoration:none">${kind === "admin" ? "Zurück zum Wiki" : "Zum Wiki"}</a></div></div>`;
+  }
+
+  async function load() {
+    try { S = await api("status"); render(); }
+    catch (e) { if (e.gate) gate(e.gate); else $("#app").innerHTML = `<div class="gate"><div class="box"><h1>Keine Verbindung</h1><p class="lede">Der Brainbox-Dienst antwortet nicht. In ein paar Sekunden neu laden.</p></div></div>`; }
+  }
+
+  function show(id, r) {
+    const el = $(`#out-${id}`) || $("#page .out");
+    if (!el) return;
+    el.hidden = false; el.className = `out ${r.ok ? "ok" : "bad"}`; el.textContent = r.output || (r.ok ? "Erledigt." : "Hat nicht geklappt.");
+  }
+  async function act(name, body, btn, outId) {
+    const label = btn ? btn.textContent : "";
+    if (btn) { btn.disabled = true; btn.textContent = "Läuft …"; }
+    try {
+      const r = await api(name, body || {});
+      if (name === "claude" && r.ok && r.data) { S = await api("status").catch(() => S); render(); $("#claude-result").innerHTML = claudeResult(r.data); }
+      else show(outId, r);
+      if (r.ok && !["update/log", "link", "proxmox/test", "claude"].includes(name)) { S = await api("status"); const keep = $(`#out-${outId}`)?.outerHTML; render(); if (keep) { const n = $(`#out-${outId}`); if (n) n.outerHTML = keep; } }
+      if (name === "update/start") pollUpdate();
+      return r;
+    } catch (e) { if (e.gate) gate(e.gate); else show(outId, { ok: false, output: String(e.message || e) }); }
+    finally { if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = label; } }
+  }
+  function pollUpdate() { let n = 0; const t = setInterval(async () => { n++; try { const r = await api("update/log", {}); show("update", r); } catch (e) { /* während des Neustarts */ } if (n > 240) clearInterval(t); }, 5000); }
+
+  ROOT.addEventListener("click", (e) => {
+    const g = e.target.closest("[data-go]");
+    if (g) { e.preventDefault(); go(g.dataset.go); return; }
+    const c = e.target.closest("[data-copy]");
+    if (c) { copy(c.dataset.copy, c); return; }
+    const a = e.target.closest("[data-act]");
+    if (a) {
+      const name = a.dataset.act, out = name.split("/")[0];
+      if (name === "proxmox/remove" && !a.dataset.sure) { a.dataset.sure = "1"; a.textContent = "Wirklich entfernen?"; return; }
+      if (name === "netbird/remove" && !a.dataset.sure) { a.dataset.sure = "1"; a.textContent = "Wirklich trennen?"; return; }
+      if (name === "update/start" && !a.dataset.sure) { a.dataset.sure = "1"; a.textContent = "Jetzt wirklich starten?"; return; }
+      act(name, a.dataset.name ? { name: a.dataset.name } : {}, a, out);
+      return;
+    }
+    const clr = e.target.closest("[data-clear]");
+    if (clr) {
+      const keys = { email: ["SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM_EMAIL"], google: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"], microsoft: ["AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_TENANT_ID"], discord: ["DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET", "DISCORD_SERVER_ID"], oidc: ["OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET", "OIDC_ISSUER_URL"] }[clr.dataset.clear] || [];
+      act("login", { values: Object.fromEntries(keys.map((k) => [k, ""])) }, clr, "login");
+    }
+  });
+  ROOT.addEventListener("submit", (e) => {
+    const f = e.target.closest("form[data-form]");
+    if (!f) return;
+    e.preventDefault();
+    const d = Object.fromEntries(new FormData(f).entries());
+    const btn = f.querySelector('button[type="submit"]');
+    const kind = f.dataset.form;
+    if (kind === "proxmox") act("proxmox/add", { name: d.name.trim().toLowerCase(), url: d.url.trim(), tokenId: d.tokenId.trim(), secret: d.secret, insecure: !!f.insecure.checked }, btn, "proxmox");
+    if (kind === "netbird") act("netbird", { url: d.url.trim(), token: d.token }, btn, "netbird");
+    if (kind === "link") act("link", { email: (d.email || "").trim() }, btn, "link");
+    if (kind === "login") {
+      const values = {};
+      for (const [k, v] of Object.entries(d)) { if (k === "SMTP_PRESET") continue; if (String(v).trim() !== "") values[k] = String(v).trim(); }
+      if (d.SMTP_PRESET !== undefined && values.SMTP_USERNAME) {
+        const [host, port] = d.SMTP_PRESET.split(":");
+        Object.assign(values, { SMTP_HOST: host, SMTP_PORT: port, SMTP_SECURE: port === "465" ? "true" : "false", SMTP_SERVICE: "" });
+        values.SMTP_FROM_EMAIL = values.SMTP_FROM_EMAIL || values.SMTP_USERNAME;
+      }
+      act("login", { values }, btn, "login");
+    }
+  });
+  if (USE_HASH) window.addEventListener("hashchange", () => { const h = location.hash.slice(1); if (h && h !== view && PAGES[h]) { view = h; render(); } });
+  load();
+})();
+</script>
+</body>
+</html>

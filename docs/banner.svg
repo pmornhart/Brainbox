@@ -1,18 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="240" viewBox="0 0 960 240" role="img" aria-label="Brainbox – Outline-Wissensdatenbank für Proxmox VE">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="240" viewBox="0 0 960 240" role="img" aria-label="Brainbox 1.0 – Wiki fürs Homelab">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#14231c"/>
-      <stop offset="1" stop-color="#1e3a2d"/>
-    </linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0B1410"/><stop offset="1" stop-color="#14261D"/></linearGradient>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5BE3A4"/><stop offset="1" stop-color="#22A06B"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#4CD596" stop-opacity="0.35"/><stop offset="1" stop-color="#4CD596" stop-opacity="0"/></radialGradient>
   </defs>
   <rect width="960" height="240" rx="18" fill="url(#bg)"/>
-  <g fill="none" stroke="#5cc396" stroke-width="2" opacity="0.18">
-    <path d="M640 40h260M640 80h220M640 120h260M640 160h180M640 200h240"/>
+  <circle cx="128" cy="120" r="120" fill="url(#glow)"/>
+  <g fill="none" stroke="#4CD596" stroke-width="1.5" opacity="0.16">
+    <path d="M620 52h270M620 84h230M620 116h270M620 148h170M620 180h250"/>
   </g>
-  <g transform="translate(70 62)">
-    <rect width="116" height="116" rx="22" fill="#5cc396"/>
-    <path d="M30 34h56M30 58h56M30 82h36" stroke="#14231c" stroke-width="9" stroke-linecap="round"/>
-  </g>
-  <text x="222" y="122" fill="#e8f2ec" font-family="IBM Plex Sans, Segoe UI, Helvetica, Arial, sans-serif" font-size="64" font-weight="700">Brainbox</text>
-  <text x="224" y="164" fill="#a9c7b6" font-family="IBM Plex Sans, Segoe UI, Helvetica, Arial, sans-serif" font-size="24">Wiki fürs Homelab · Proxmox · NetBird · Claude</text>
+  <g transform="translate(62 54) scale(5.5)"><path fill="url(#g)" fill-rule="evenodd" d="M7.5 2H16.5A5.5 5.5 0 0 1 22 7.5V16.5A5.5 5.5 0 0 1 16.5 22H7.5A5.5 5.5 0 0 1 2 16.5V7.5A5.5 5.5 0 0 1 7.5 2Z M7.2 6.4H16.8A1.2 1.2 0 0 1 18 7.6V7.6A1.2 1.2 0 0 1 16.8 8.8H7.2A1.2 1.2 0 0 1 6 7.6V7.6A1.2 1.2 0 0 1 7.2 6.4Z M7.2 10.8H16.8A1.2 1.2 0 0 1 18 12V12A1.2 1.2 0 0 1 16.8 13.2H7.2A1.2 1.2 0 0 1 6 12V12A1.2 1.2 0 0 1 7.2 10.8Z M7.2 15.2H11.2A1.2 1.2 0 0 1 12.4 16.4V16.4A1.2 1.2 0 0 1 11.2 17.6H7.2A1.2 1.2 0 0 1 6 16.4V16.4A1.2 1.2 0 0 1 7.2 15.2Z M14.7 16.4A1.7 1.7 0 1 0 18.1 16.4A1.7 1.7 0 1 0 14.7 16.4Z"/></g>
+  <text x="222" y="118" fill="#E2EBE5" font-family="Geist, IBM Plex Sans, Segoe UI, Helvetica, Arial, sans-serif" font-size="66" font-weight="700" letter-spacing="-1">Brainbox</text>
+  <text x="226" y="160" fill="#8FA89A" font-family="Geist, Segoe UI, Helvetica, Arial, sans-serif" font-size="23">Wiki fürs Homelab · Proxmox · NetBird · Claude</text>
+  <g transform="translate(226 180)"><rect width="128" height="28" rx="14" fill="#4CD596" fill-opacity="0.12" stroke="#4CD596" stroke-opacity="0.5"/>
+    <text x="64" y="19" text-anchor="middle" fill="#4CD596" font-family="Geist Mono, ui-monospace, Menlo, monospace" font-size="14">v1.0.0</text></g>
 </svg>
