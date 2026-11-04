@@ -1,0 +1,14 @@
+# Claude Code: nur Einstellungen und Hooks ins Repo
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+.claude/fortschritt/
+
+# Geheimnisse und lokale Dateien
+.env
+*.env
+*.creds
+*.log
+node_modules/
+.DS_Store
+Thumbs.db
