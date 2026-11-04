@@ -32,7 +32,7 @@ Brainbox ist ein eigenständiges Wiki für dein Homelab. Im Kern arbeitet [Outli
 | | |
 |---|---|
 | 🎨 **Eigenes Gesicht** | Brainbox-Logo, eigener Name, Schrift Geist und das Farbschema „Homelab-Konsole“ – dunkel als Standard, hell auf Wunsch. |
-| ⚙️ **Brainbox-Zentrale** | Alle Einstellungen im Browser, unten in der Seitenleiste: Proxmox-Server, NetBird, Claude, Bereiche, Anmeldung, Version und Update. Jeder Bereich erklärt Schritt für Schritt, was zu tun ist. |
+| ⚙️ **Brainbox-Zentrale** | Alle Einstellungen im Browser, oben in der Seitenleiste: Proxmox-Server, NetBird, Claude, Bereiche, Anmeldung, Version und Update. Jeder Bereich erklärt Schritt für Schritt, was zu tun ist. |
 | 🖥️ **Beliebig viele Proxmox-Server** | Jeder Server bekommt eine eigene Seite mit Nodes und Auslastung, darunter je VM und Container ein Eintrag. Neue erscheinen nach spätestens 5 Minuten. |
 | 🌐 **NetBird** | Geräte, Netzwerke und Domains, automatisch mit den passenden VMs verknüpft. |
 | 🗂️ **Bereiche** | Regeln wie `*.morninghosting.de → Minecraft-Server` sortieren Domains, VMs und Geräte, mit Unterbereichen. |
@@ -79,13 +79,13 @@ Im Reverse-Proxy (z. B. Nginx Proxy Manager): `brainbox.morncloud.de` → `http:
 
 ### 3. Login-Link anklicken
 
-Du bist als Admin drin. Unten in der Seitenleiste findest du die **Brainbox-Zentrale** – dort verbindest du weitere Proxmox-Server, NetBird und Claude.
+Du bist als Admin drin. Oben in der Seitenleiste findest du die **Brainbox-Zentrale** – dort verbindest du weitere Proxmox-Server, NetBird und Claude.
 
 > Ausführlich, mit allen Optionen: **[Proxmox Quick-Start-Guide](docs/proxmox-quickstart.md)**
 
 ## ⚙️ Brainbox-Zentrale
 
-Unter `/zentrale`, unten in der Seitenleiste als „Brainbox-Zentrale“. Nur Admins kommen hinein.
+Unter `/zentrale`, oben in der Seitenleiste als „Brainbox-Zentrale“. Nur Admins kommen hinein.
 
 <table>
   <tr>
@@ -200,9 +200,9 @@ Rein kommt nur, wer unter Einstellungen → Benutzer eingeladen ist – egal üb
 
 Brainbox hat eigene Versionen ([Änderungen](CHANGELOG.md)). Zu jeder gehört ein fest getesteter Outline-Kern – in der Datei [`brainbox.version`](brainbox.version).
 
-**Update-Symbol:** Brainbox sieht alle 6 Stunden selbst nach. Gibt es eine neue Version, erscheint unten in der Seitenleiste **„Update verfügbar · 1.1.0“**. Ein Klick darauf öffnet die Zentrale, dort startet **Jetzt aktualisieren** das Update. Auch die Begrüßung im Terminal sagt Bescheid.
+**Update-Symbol:** Brainbox sieht alle 6 Stunden selbst nach. Gibt es eine neue Version, erscheint oben in der Seitenleiste **„Update verfügbar · 1.1.0“**. Ein Klick darauf öffnet die Zentrale, dort startet **Jetzt aktualisieren** das Update. Auch die Begrüßung im Terminal sagt Bescheid.
 
-<p align="center"><img src="docs/screenshots/update-symbol.png" alt="Update-Symbol unten in der Seitenleiste und Hinweis in der Zentrale" width="900"></p>
+<p align="center"><img src="docs/screenshots/update-symbol.png" alt="Update-Symbol oben in der Seitenleiste und Hinweis in der Zentrale" width="900"></p>
 
 **Update-Befehl** – im Container oder vom Proxmox-Host aus:
 
@@ -290,7 +290,13 @@ Domain bei der Installation leer lassen, dann läuft Brainbox im Heimnetz unter 
 
 <details><summary>Geht es ohne Proxmox?</summary>
 
-Ja, auf einem frischen Debian 13 als root:
+Ja, auf einem frischen Debian 13 als root. Dort fehlt meist `curl`, also zuerst:
+
+```bash
+apt-get update && apt-get install -y curl
+```
+
+Dann:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/pmornhart/Brainbox/main/install.sh)"

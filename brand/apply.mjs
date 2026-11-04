@@ -126,7 +126,7 @@ import SidebarLink from "./SidebarLink";
 
 type UpdateInfo = { available: boolean; latest: string | null };
 
-/** Brainbox: „Update verfügbar“ unten in der Seitenleiste, führt zur Zentrale. */
+/** Brainbox: „Update verfügbar“ oben in der Seitenleiste, führt zur Zentrale. */
 export default function BrainboxUpdateLink() {
   const [info, setInfo] = useState<UpdateInfo | null>(null);
 

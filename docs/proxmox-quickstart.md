@@ -44,7 +44,7 @@ Daraus legt es das Wiki samt Admin an. Am Ende zeigt es einen **Login-Link**, de
 | | |
 |---|---|
 | Weboberfläche | `http://<IP>:3000` |
-| Brainbox-Zentrale | `http://<IP>:3000/zentrale`, unten in der Seitenleiste des Wikis (nur Admins) |
+| Brainbox-Zentrale | `http://<IP>:3000/zentrale`, oben in der Seitenleiste des Wikis (nur Admins) |
 | Ports | `3000` Zentrale und Tor zum Wiki, `3100` Wiki-Kern (nur intern) |
 | Dienste | `brainbox` (Wiki-Kern), `brainbox-zentrale`, `brainbox-sync.timer` (Abgleich) |
 | Logs | `journalctl -u brainbox -f`, `journalctl -u brainbox-zentrale`, `journalctl -u brainbox-sync` |
@@ -75,7 +75,7 @@ Passkeys, Google, Microsoft und die Claude-App funktionieren nur über HTTPS mit
 
 ## Brainbox-Zentrale
 
-Alle Einstellungen gibt es im Browser. Unten in der Seitenleiste des Wikis findest du **Brainbox-Zentrale**. Jeder Bereich erklärt Schritt für Schritt, was zu tun ist:
+Alle Einstellungen gibt es im Browser. Oben in der Seitenleiste des Wikis findest du **Brainbox-Zentrale**. Jeder Bereich erklärt Schritt für Schritt, was zu tun ist:
 
 | Bereich | Was du dort machst |
 |---|---|
@@ -209,7 +209,7 @@ Claude legt keine eigenen Sammlungen an, weil die privat wären. Es schreibt in 
 
 Brainbox sieht alle 6 Stunden selbst nach, ob es eine neue Version gibt. Ist eine da, siehst du das an drei Stellen:
 
-- **im Wiki:** unten in der Seitenleiste erscheint **„Update verfügbar · 1.1.0“** mit Download-Symbol (nur für Admins)
+- **im Wiki:** oben in der Seitenleiste erscheint **„Update verfügbar · 1.1.0“** mit Download-Symbol (nur für Admins)
 - **in der Zentrale:** ein Hinweis in der Übersicht und ein Symbol bei „Version & Update“, dort mit **Jetzt aktualisieren**
 - **im Terminal:** die Begrüßung beim Öffnen der Konsole zeigt „Update verfügbar“
 

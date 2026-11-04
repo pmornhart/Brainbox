@@ -80,7 +80,7 @@ function versionInfo() {
 
 // --- Gibt es eine neue Brainbox? ------------------------------------------------------------------
 // Liest brainbox.version aus dem Brainbox-Repo (ein paar Bytes, kein Download des Bausatzes).
-// Das Ergebnis zeigt die Zentrale an und das Wiki als „Update verfügbar“ unten in der Seitenleiste.
+// Das Ergebnis zeigt die Zentrale an und das Wiki als „Update verfügbar“ oben in der Seitenleiste.
 let lastCheck = readJson(UPDATE_STATE, null);
 const newer = (a, b) => {
   const x = String(a).split(".").map((n) => parseInt(n, 10) || 0), y = String(b).split(".").map((n) => parseInt(n, 10) || 0);

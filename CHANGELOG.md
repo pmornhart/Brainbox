@@ -7,7 +7,7 @@ Brainbox hat eigene Versionen. Der Kern (Outline) ist je Version fest getestet u
 Erste eigenständige Brainbox.
 
 - **Eigenes Gesicht:** Logo, Name, Icons, Schrift (Geist) und Farbschema „Homelab-Konsole“, dunkel als Standard
-- **Brainbox-Zentrale** im Browser (`/zentrale`, unten in der Seitenleiste): Übersicht, Proxmox-Server, NetBird, Claude, Bereiche, Anmeldung, Update
+- **Brainbox-Zentrale** im Browser (`/zentrale`, oben in der Seitenleiste): Übersicht, Proxmox-Server, NetBird, Claude, Bereiche, Anmeldung, Update
 - **Mehrere Proxmox-Server**, jeder mit eigenem Eintrag und seinen VMs/Containern darunter
 - **Ein Container = ein Wiki:** Wiki und Admin werden bei der Installation angelegt, Login-Link am Ende
 - **Sechs Anmeldewege:** E-Mail, Passkey, Google, Microsoft, Discord, OIDC (`brainbox-login`)
