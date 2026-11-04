@@ -305,15 +305,15 @@ msg_ok "Container läuft (IP ${IP})"
 # --- Installation im Container ----------------------------------------------------------
 TMP_DIR="$(mktemp -d)"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd || true)"
-for pair in install.sh:install.sh update.sh:update.sh brainbox-login.sh:login.sh brainbox-connect.sh:connect.sh connect/sync.mjs:sync.mjs; do
-  f="${pair%%:*}"; t="${pair#*:}"
-  if [[ -n "$SCRIPT_DIR" && -f "${SCRIPT_DIR}/brainbox.sh" && -f "${SCRIPT_DIR}/../${f}" ]]; then
-    cp "${SCRIPT_DIR}/../${f}" "${TMP_DIR}/${t}"
-  else
-    curl -fsSL "${RAW}/${f}" -o "${TMP_DIR}/${t}"
-  fi
-  pct push "$CTID" "${TMP_DIR}/${t}" "/root/brainbox-${t}" --perms 755
-done
+if [[ -n "$SCRIPT_DIR" && -f "${SCRIPT_DIR}/brainbox.sh" && -f "${SCRIPT_DIR}/../install.sh" && -f "${SCRIPT_DIR}/../brainbox.version" ]]; then
+  # Aus einem lokalen Klon gestartet: genau diesen Stand als Bausatz mitschicken
+  cp "${SCRIPT_DIR}/../install.sh" "${TMP_DIR}/install.sh"
+  tar -czf "${TMP_DIR}/kit.tar.gz" --exclude=.git -C "$(dirname "$(cd "${SCRIPT_DIR}/.." && pwd)")" "$(basename "$(cd "${SCRIPT_DIR}/.." && pwd)")"
+  pct push "$CTID" "${TMP_DIR}/kit.tar.gz" /root/brainbox-kit.tar.gz --perms 644
+else
+  curl -fsSL "${RAW}/install.sh" -o "${TMP_DIR}/install.sh"
+fi
+pct push "$CTID" "${TMP_DIR}/install.sh" /root/brainbox-install.sh --perms 755
 
 # Proxmox-Zugang nur zum Lesen für den Wiki-Abgleich (Nutzer brainbox@pve, Rolle PVEAuditor)
 if [[ "$PVE_SYNC" == "yes" && -n "$ADMIN_EMAIL" ]]; then
@@ -337,6 +337,7 @@ if [[ "$PVE_SYNC" == "yes" && -n "$ADMIN_EMAIL" ]]; then
     INSECURE_LINE="PVE_INSECURE='1'"
   fi
   {
+    echo "PVE_NAME='$(hostname -s | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-')'"
     echo "PVE_URL='${PVE_URL}'"
     echo "PVE_TOKEN_ID='brainbox@pve!${TOKEN_NAME}'"
     echo "PVE_TOKEN_SECRET='${TOKEN_SECRET}'"
@@ -351,6 +352,7 @@ fi
 echo -e "\n  ${BOLD}Installation im Container${CL}"
 pct exec "$CTID" -- env \
   BRAINBOX_FROM_HOST=yes \
+  BRAINBOX_CTID="$CTID" \
   BRAINBOX_WIKI_NAME="$WIKI_NAME" \
   BRAINBOX_DOMAIN="$DOMAIN" \
   BRAINBOX_ADMIN_NAME="$ADMIN_NAME" \
@@ -367,15 +369,16 @@ pct exec "$CTID" -- rm -f /root/brainbox-install.sh
 if [[ -n "$DOMAIN" ]]; then WIKI_URL="https://${DOMAIN}"; else WIKI_URL="http://${IP}:${PORT}"; fi
 pct set "$CTID" --description "<div align='center'>
 <h2>🧠 ${WIKI_NAME}</h2>
-<p>Brainbox · Outline-Wissensdatenbank</p>
-<p><a href='${WIKI_URL}' target='_blank'>${WIKI_URL}</a> · <a href='http://${IP}:${PORT}' target='_blank'>Heimnetz</a> · <a href='https://github.com/${REPO}' target='_blank'>GitHub</a> · <a href='https://docs.getoutline.com/s/hosting/' target='_blank'>Outline-Doku</a></p>
-<p>Im Container: <code>update</code> · <code>brainbox-login</code> · <code>brainbox-login link</code></p>
+<p>Brainbox · Wiki fürs Homelab</p>
+<p><a href='${WIKI_URL}' target='_blank'>${WIKI_URL}</a> · <a href='http://${IP}:${PORT}' target='_blank'>Heimnetz</a> · <a href='https://github.com/${REPO}' target='_blank'>GitHub</a> · <a href='${WIKI_URL}/zentrale' target='_blank'>Zentrale</a></p>
+<p>Update: <code>pct exec ${CTID} -- update</code> · im Container: <code>update</code> · <code>brainbox-connect</code> · <code>brainbox-login</code></p>
 </div>" >/dev/null
 
 echo
 msg_ok "Fertig!"
 echo -e "${INFO}${GN}Wiki '${WIKI_NAME}' wurde eingerichtet.${CL}"
 echo -e "${INFO}${YW}Adresse:${CL} ${BGN}${WIKI_URL}${CL}${DOMAIN:+   (im Heimnetz: http://${IP}:${PORT})}"
+echo -e "${INFO}${YW}Brainbox-Zentrale:${CL} ${WIKI_URL}/zentrale  – weitere Proxmox-Server, NetBird, Claude, Anmeldung, Update"
 if [[ -n "$DOMAIN" ]]; then
   echo -e "${INFO}${YW}Reverse-Proxy einrichten:${CL} ${DOMAIN} → http://${IP}:${PORT}  (Websockets an, SSL-Zertifikat)"
 fi
@@ -390,5 +393,6 @@ else
   echo -e "${INFO}${YW}Beim ersten Aufruf Wiki-Name und Admin-E-Mail im Browser eingeben.${CL}"
 fi
 echo -e "${INFO}${YW}E-Mail-Login, Passkeys, Google, Microsoft … einrichten:${CL} pct enter ${CTID}  →  brainbox-login"
-echo -e "${INFO}${YW}Claude, Proxmox und NetBird verbinden:${CL} pct enter ${CTID}  →  brainbox-connect"
+echo -e "${INFO}${YW}Im Terminal geht alles auch:${CL} pct enter ${CTID}  →  brainbox-connect / brainbox-login"
+echo -e "${INFO}${YW}Update:${CL} pct exec ${CTID} -- update   (oder in der Zentrale: Version & Update)"
 echo -e "${INFO}${YW}Noch ein Wiki?${CL} Dieses Skript erneut ausführen und eine andere Domain eintragen."

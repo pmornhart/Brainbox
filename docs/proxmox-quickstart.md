@@ -1,16 +1,19 @@
 # 🧠 Brainbox – Proxmox Quick-Start
 
-Die Wissensdatenbank [Outline](https://www.getoutline.com) als LXC-Container auf Proxmox VE: ein Wiki pro Container, mit Login-Link, sechs Anmeldewegen, Claude als Mitschreiber und automatischen Einträgen aus Proxmox und NetBird.
+Brainbox ist ein Wiki fürs Homelab als LXC-Container auf Proxmox VE. Ein Container ist ein Wiki. Dazu gehören Login-Link, sechs Anmeldewege, die **Brainbox-Zentrale** im Browser, beliebig viele Proxmox-Server, NetBird und Claude als Mitschreiber. Im Kern arbeitet [Outline](https://www.getoutline.com).
 
 ## Installieren
 
-In der **Proxmox-Shell** (Host, nicht im Container) ausführen:
+In der **Proxmox-Shell** ausführen, also auf dem Host und nicht im Container:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/pmornhart/Brainbox/main/proxmox/brainbox.sh)"
 ```
 
-Es erscheint ein Dialog: **Standard-Einstellungen** übernimmt die Werte unten, **Erweiterte Einstellungen** fragt zusätzlich ID, Hostname, Disk, CPU, RAM, Bridge, IP/Gateway, VLAN, Root-Passwort und Container-Typ ab.
+Zuerst erscheint ein Dialog:
+
+- **Standard-Einstellungen** übernimmt die Werte unten.
+- **Erweiterte Einstellungen** fragt zusätzlich ID, Hostname, Disk, CPU, RAM, Bridge, IP/Gateway, VLAN, Root-Passwort und Container-Typ ab.
 
 In beiden Fällen fragt das Skript:
 
@@ -20,9 +23,9 @@ In beiden Fällen fragt das Skript:
 | Domain | `brainbox.morncloud.de` (leer = nur `http://IP:3000`) |
 | Dein Name | `Philip` |
 | Deine E-Mail | Admin des Wikis |
-| Proxmox im Wiki? | Ja = jede VM und jeder Container bekommt einen Eintrag (Lesezugang wird angelegt) |
+| Proxmox im Wiki? | Ja = dieser Server ist sofort verbunden, der Lesezugang wird angelegt |
 
-Daraus legt es das Wiki samt Admin an und zeigt am Ende einen **Login-Link** (einmal benutzbar, 60 Minuten gültig). Der Hostname ergibt sich aus der Domain (`brainbox.morncloud.de` → `brainbox`).
+Daraus legt es das Wiki samt Admin an. Am Ende zeigt es einen **Login-Link**, der einmal benutzbar und 60 Minuten gültig ist. Der Hostname ergibt sich aus der Domain (`brainbox.morncloud.de` → `brainbox`).
 
 ## Standardwerte
 
@@ -41,104 +44,116 @@ Daraus legt es das Wiki samt Admin an und zeigt am Ende einen **Login-Link** (ei
 | | |
 |---|---|
 | Weboberfläche | `http://<IP>:3000` |
-| Port | 3000 |
-| Konfiguration | `/opt/brainbox/.env` |
-| Programm | `/opt/brainbox` |
+| Brainbox-Zentrale | `http://<IP>:3000/zentrale`, unten in der Seitenleiste des Wikis (nur Admins) |
+| Ports | `3000` Zentrale und Tor zum Wiki, `3100` Wiki-Kern (nur intern) |
+| Dienste | `brainbox` (Wiki-Kern), `brainbox-zentrale`, `brainbox-sync.timer` (Abgleich) |
+| Logs | `journalctl -u brainbox -f`, `journalctl -u brainbox-zentrale`, `journalctl -u brainbox-sync` |
+| Wiki-Kern | `/opt/brainbox`, Einstellungen in `/opt/brainbox/.env` |
+| Brainbox-Bausatz | `/opt/brainbox-kit` (Design, Zentrale, Befehle) |
+| Version | `/root/.brainbox`, letzte Update-Prüfung in `/var/lib/brainbox/update.json` |
+| Proxmox-Server | `/etc/brainbox/proxmox.json` (nur root) |
+| Weitere Verbindungen | `/etc/brainbox/connect.env` (nur root) |
 | Hochgeladene Dateien | `/var/lib/outline/data` |
 | Datenbank-Zugang | `/root/brainbox.creds` |
-| Anmeldung einrichten | `brainbox-login` |
-| Installierte Version | `/root/.brainbox` |
-| Dienst | `systemctl status brainbox` |
-| Logs | `journalctl -u brainbox -f` |
-| Verbindungen (Claude, Proxmox, NetBird) | `brainbox-connect`, Einstellungen in `/etc/brainbox/connect.env` |
-| Abgleich-Log | `journalctl -u brainbox-sync` |
 
 ## Hinweise
 
-- Nach der Installation migriert Outline die Datenbank. Die Weboberfläche ist deshalb ein bis zwei Minuten nicht erreichbar.
-- **Erster Login:** über den Login-Link vom Ende der Installation. Abgelaufen oder schon benutzt? Im Container `brainbox-login link` für einen neuen. Google, Microsoft oder Slack sind dafür nicht nötig.
-- Ohne Admin-E-Mail legt das Skript kein Wiki an. Dann zeigt Outline beim ersten Aufruf „Arbeitsbereich erstellen“ im Browser.
-- **Weitere Anmeldewege** richtest du mit `brainbox-login` ein, siehe unten.
+- **Wartezeit nach der Installation:** Der Wiki-Kern richtet zuerst die Datenbank ein. Solange zeigt die Adresse „Brainbox startet gerade“ – ein bis zwei Minuten.
+- **Erster Login:** über den Login-Link vom Ende der Installation. Ist er abgelaufen oder schon benutzt, holst du einen neuen in der Zentrale (Übersicht → Login-Link) oder im Container mit `brainbox-login link`.
+- **Ohne Admin-E-Mail** legt das Skript kein Wiki an. Dann zeigt der Browser beim ersten Aufruf „Arbeitsbereich erstellen“.
 - **Mehrere Wikis:** Ein Container ist ein Wiki. Für ein weiteres das Skript erneut ausführen und eine andere Domain eintragen.
-- Die Oberfläche ist auf Deutsch eingestellt (`DEFAULT_LANGUAGE=de_DE`).
-- Ändert sich die IP des Containers, mit `brainbox-login` → Adresse die neue Adresse eintragen.
+- **Neue IP:** Ändert sich die IP des Containers, trägst du sie in der Zentrale unter Anmeldung ein (oder `brainbox-login` → Adresse).
 
 ## HTTPS mit eigener Domain
 
-Passkeys, Google und Microsoft funktionieren nur über HTTPS mit Domain. Beispiel mit Nginx Proxy Manager:
+Passkeys, Google, Microsoft und die Claude-App funktionieren nur über HTTPS mit Domain. Beispiel mit Nginx Proxy Manager:
 
 1. DNS: `brainbox.morncloud.de` zeigt auf deinen Reverse-Proxy.
 2. Proxy Host anlegen: Domain `brainbox.morncloud.de`, Schema `http`, Ziel `<IP des Containers>`, Port `3000`, **Websockets Support an**.
 3. Reiter SSL: Let's-Encrypt-Zertifikat, „Force SSL“ an.
-4. Im Container `brainbox-login` → **Adresse** → `https://brainbox.morncloud.de`.
+4. Hast du die Domain bei der Installation leer gelassen: im Container `brainbox-login` → **Adresse** → `https://brainbox.morncloud.de`.
 
-## Anmeldung einrichten: `brainbox-login`
+## Brainbox-Zentrale
 
-Im Container `brainbox-login` eingeben. Das Menü fragt alles Nötige ab, schreibt `/opt/brainbox/.env` und startet Brainbox neu.
+Alle Einstellungen gibt es im Browser. Unten in der Seitenleiste des Wikis findest du **Brainbox-Zentrale**. Jeder Bereich erklärt Schritt für Schritt, was zu tun ist:
 
-| Menüpunkt | Was passiert | Weiterleitungs-Adresse (Redirect-URI) |
+| Bereich | Was du dort machst |
+|---|---|
+| Übersicht | Status aller Verbindungen, jetzt abgleichen, Login-Link erstellen |
+| Proxmox-Server | Server hinzufügen, prüfen, entfernen – mit kopierbaren Befehlen für den Lesezugang |
+| NetBird | API-Adresse und Token eintragen, trennen |
+| Claude | Konto einrichten, Schlüssel und Anleitung für App und Code |
+| Bereiche | Zuordnungsregeln erklärt, Link zur Regel-Seite |
+| Anmeldung | E-Mail, Google, Microsoft, Discord, OIDC – mit Redirect-URIs zum Kopieren |
+| Version & Update | installierte und neueste Version, Update starten, Protokoll |
+
+Im Terminal geht dasselbe mit `brainbox-connect`, `brainbox-login` und `update`.
+
+## Anmeldung einrichten
+
+In der Zentrale unter **Anmeldung** oder im Container mit `brainbox-login`. Beides schreibt `/opt/brainbox/.env` und startet den Wiki-Kern neu.
+
+| Weg | Was du brauchst | Weiterleitungs-Adresse (Redirect-URI) |
 |---|---|---|
-| Adresse | `URL=` setzen, z. B. `https://brainbox.morncloud.de` | – |
-| E-Mail-Login | SMTP für Login-Mails, Vorlagen für Gmail, GMX, web.de, Outlook, Microsoft 365, IONOS, Strato, eigener Server; Test-Mail | – |
-| Passkeys | Erklärung; Passkeys sind von Anfang an an und brauchen HTTPS | – |
+| E-Mail-Login | SMTP-Zugang. Vorlagen für Gmail, GMX, web.de, Outlook, Microsoft 365, IONOS, Strato und eigene Server; mit Test-Mail | – |
+| Passkeys | nur HTTPS, sonst nichts – von Anfang an an | – |
 | Google | Client-ID und Schlüssel | `<URL>/auth/google.callback` |
 | Microsoft | Client-ID, Geheimnis, optional Tenant | `<URL>/auth/azure.callback` |
 | Discord | Client-ID, Secret, optional Server-ID | `<URL>/auth/discord.callback` |
 | OIDC | Name, Issuer-URL, Client-ID, Secret (Pocket ID, Authentik, Keycloak …) | `<URL>/auth/oidc.callback` |
-| Sprache | Deutsch oder Englisch | – |
 
-Ohne Menü: `brainbox-login status`, `brainbox-login link [E-Mail]`, `brainbox-login set KEY=WERT …`, `brainbox-login unset KEY …`, `brainbox-login testmail du@beispiel.de`, `brainbox-login workspace <Wiki-Name> <Admin-Name> <E-Mail>` (nur wenn noch keins existiert).
+Ohne Menü: `brainbox-login status`, `brainbox-login link [E-Mail]`, `brainbox-login set KEY=WERT …`, `brainbox-login unset KEY …`, `brainbox-login testmail du@beispiel.de`.
 
 Gut zu wissen:
 
-- **E-Mail-Login** gilt für alle, die im Workspace sind. Neue Leute lädst du unter Einstellungen → Benutzer ein.
-- **Passkey** legt jeder selbst an: Profil → Einstellungen → Passkeys. Der Knopf „Mit Passkey fortfahren“ erscheint, sobald es mindestens einen gibt.
+- **Nur mit Einladung:** Rein kommt nur, wer unter Einstellungen → Benutzer eingeladen ist, egal über welchen Weg.
+- **Passkey** legt jeder selbst an: Profil → Einstellungen → Passkeys.
 - **Microsoft** klappt nur mit Firmen- oder Schulkonten (Microsoft 365 / Entra ID). Private @outlook.com- und @hotmail.com-Konten nehmen E-Mail oder Passkey.
-- **Google**: Private @gmail.com-Konten können einem bestehenden Workspace beitreten, aber keinen neuen anlegen.
+- **Google:** Private @gmail.com-Konten können beitreten, aber kein neues Wiki anlegen.
 
-## Claude verbinden: `brainbox-connect claude`
+## Proxmox-Server
 
-Legt im Wiki das Konto **Claude** (Rolle Mitglied) und die gemeinsame Sammlung **Von Claude** an, erstellt einen API-Schlüssel und hinterlegt unter Einstellungen → Künstliche Intelligenz eine Anweisung für Claude. Outline bringt dafür einen eigenen MCP-Anschluss mit: `https://<deine-domain>/mcp`.
+Du kannst beliebig viele Server oder Cluster verbinden. Hast du bei der Installation „Ja“ gewählt, ist der eigene Server schon drin: Der Installer legt auf dem Host den Nutzer `brainbox@pve` mit Rolle **PVEAuditor** (nur Lesen) und den Token `wiki<ID>` an.
 
-| Wo | Wie |
-|---|---|
-| Claude-App (claude.ai, Handy, Desktop) | Im Browser als Claude anmelden (Login-Link aus der Ausgabe), dann in Claude: Einstellungen → Connectors → Benutzerdefinierten Connector hinzufügen → `https://<deine-domain>/mcp` → Verbinden → Zulassen. Braucht HTTPS aus dem Internet. |
-| Claude Code | `claude mcp add --transport http brainbox https://<deine-domain>/mcp --header "Authorization: Bearer <Schlüssel>"` |
+**Weiteren Server hinzufügen** – in der Zentrale unter *Proxmox-Server*, oder so:
 
-Claude legt keine eigenen Sammlungen an (die wären privat), sondern schreibt in bestehende oder in **Von Claude**. Abschalten: Einstellungen → Benutzer → Claude sperren.
+1. Auf dem neuen Proxmox-Host einen Lesezugang anlegen:
 
-## Proxmox im Wiki: `brainbox-connect proxmox`
+   ```bash
+   pveum user add brainbox@pve
+   pveum acl modify / --users brainbox@pve --roles PVEAuditor
+   pveum user token add brainbox@pve wiki --privsep 0
+   ```
 
-Bei der Installation mit „Ja“ beantwortet, ist alles schon eingerichtet: Der Installer legt auf dem Host den Nutzer `brainbox@pve` mit Rolle **PVEAuditor** (nur Lesen) und einen Token `wiki<ID>` an.
+2. Im Brainbox-Container mit Name, Adresse, `full-tokenid` und `value` verbinden:
 
-Von Hand, auf dem Proxmox-Host:
+   ```bash
+   brainbox-connect proxmox add hetzner https://203.0.113.10:8006 'brainbox@pve!wiki' <value> --insecure
+   ```
 
-```bash
-pveum user add brainbox@pve
-pveum acl modify / --users brainbox@pve --roles PVEAuditor
-pveum user token add brainbox@pve wiki --privsep 0
-```
+Brainbox testet den Zugang, bevor es ihn speichert. `--insecure` überspringt die Zertifikatsprüfung (Proxmox nutzt meist ein selbst ausgestelltes Zertifikat). Weitere Befehle:
 
-Dann im Container `brainbox-connect proxmox` und Adresse, `full-tokenid` und `value` eintragen. Ohne Menü:
-
-```bash
-brainbox-connect proxmox https://192.168.1.2:8006 'brainbox@pve!wiki' <value> --insecure
-```
-
-`--insecure` überspringt die Zertifikatsprüfung. Sicherer: `/etc/pve/pve-root-ca.pem` vom Host nach `/etc/brainbox/pve-root-ca.pem` im Container kopieren.
+- `brainbox-connect proxmox list` zeigt die Server.
+- `brainbox-connect proxmox test [NAME]` prüft sie.
+- `brainbox-connect proxmox remove NAME` entfernt einen Server; seine Einträge werden archiviert.
 
 Was im Wiki entsteht (Sammlung **Proxmox**):
 
-- **Proxmox – Übersicht**: alle VMs und Container mit Status, IP, NetBird-Gerät und Domains
-- **je VM/Container ein Eintrag**: ID, Typ, Node, Status, CPU, RAM, Disk, Betriebssystem, IP-Adressen, Tags, NetBird, Domains, Link zu Proxmox und die Beschreibung aus Proxmox
-- neue Gäste nach spätestens 5 Minuten, gelöschte werden archiviert (und bei Rückkehr wiederhergestellt)
-- alles ab der Überschrift **Notizen** bleibt bei jedem Abgleich erhalten
+- **Proxmox – Übersicht**: alle Server und alle VMs und Container mit Server, Status, IP, NetBird-Gerät und Domains
+- **je Server eine Seite** `<Name> (Proxmox-Server)`: Erreichbarkeit, Version, Nodes mit CPU, RAM und Laufzeit, alle Gäste
+- **je VM und Container ein Eintrag** unter seinem Server: ID, Typ, Node, Status, CPU, RAM, Disk, Betriebssystem, IP-Adressen, Tags, NetBird, Domains, Bereich, Link zu Proxmox und die Beschreibung aus Proxmox
+- Neue Gäste erscheinen nach spätestens 5 Minuten. Gelöschte werden archiviert und bei Rückkehr wiederhergestellt.
+- Ist ein Server nicht erreichbar, bleiben seine Einträge stehen und die Server-Seite zeigt den Grund.
+- Alles ab der Überschrift **Notizen** bleibt bei jedem Abgleich erhalten.
 
 IP-Adressen von VMs kommen über den QEMU-Gast-Agenten, bei Containern direkt.
 
-## NetBird im Wiki: `brainbox-connect netbird`
+## NetBird
 
-Braucht die API-Adresse (NetBird Cloud: `https://api.netbird.io`, selbst gehostet: die Adresse deines Management-Servers) und ein Access Token (Dashboard → Team → Service Users, oder eigenes Profil → Personal Access Tokens).
+In der Zentrale unter *NetBird* oder mit `brainbox-connect netbird`. Du brauchst:
+
+- **API-Adresse:** bei NetBird Cloud `https://api.netbird.io`, selbst gehostet die Adresse deines Management-Servers
+- **Access Token:** Dashboard → Team → Service Users, oder eigenes Profil → Personal Access Tokens
 
 Was im Wiki entsteht (Sammlung **NetBird**):
 
@@ -146,11 +161,14 @@ Was im Wiki entsteht (Sammlung **NetBird**):
 - **Domains**: alle Domains aus den NetBird-Netzwerken und wozu sie gehören
 - **je Gerät ein Eintrag**: Hostname, IPs, DNS-Namen, Gruppen, Betriebssystem, zuletzt gesehen
 
-**Zuordnung:** NetBird-Gerät ↔ Proxmox-Gast über gleichen Namen, Hostnamen oder gleiche IP. Domain ↔ Gast über den ersten Teil der Domain (`nextcloud.morncloud.de` → Gast `nextcloud`) oder von Hand mit einer Zeile `domain: cloud.morncloud.de` in den Proxmox-Notizen des Gasts.
+**Zuordnung:**
+
+- **NetBird-Gerät ↔ Proxmox-Gast:** über gleichen Namen, Hostnamen oder gleiche IP.
+- **Domain ↔ Gast:** über den ersten Teil der Domain (`nextcloud.morncloud.de` → Gast `nextcloud`). Von Hand geht es mit einer Zeile `domain: cloud.morncloud.de` in den Proxmox-Notizen des Gasts.
 
 ## Bereiche: Zuordnungsregeln
 
-Sobald Proxmox oder NetBird verbunden ist, legt der Abgleich die Sammlung **Bereiche** mit der Seite **Zuordnungsregeln** an. Die Tabelle darin bestimmt, was wohin gehört; Änderungen gelten beim nächsten Abgleich (spätestens nach 5 Minuten, sofort mit `brainbox-connect sync`).
+Sobald Proxmox oder NetBird verbunden ist, legt der Abgleich die Sammlung **Bereiche** an, darin die Seite **Zuordnungsregeln**. Die Tabelle darin bestimmt, was wohin gehört. Änderungen gelten beim nächsten Abgleich: spätestens nach 5 Minuten, sofort mit `brainbox-connect sync`.
 
 | Muster | trifft |
 |---|---|
@@ -160,22 +178,67 @@ Sobald Proxmox oder NetBird verbunden ist, legt der Abgleich die Sammlung **Bere
 | `tag:minecraft` | VMs und Container mit dem Proxmox-Tag „minecraft“ |
 | `gruppe:Server` | NetBird-Geräte in der Gruppe „Server“ |
 
-Die erste passende Regel gewinnt. `Minecraft-Server/Survival` legt einen Unterbereich an. Eine VM erbt den Bereich ihrer Domain, ein NetBird-Gerät den seiner VM. Jeder Bereich bekommt einen Eintrag mit Domains, VMs/Containern und Geräten; die **Bereiche – Übersicht** zeigt zusätzlich, was noch ohne Bereich ist. Die Seite „Zuordnungsregeln“ wird vom Abgleich nie überschrieben.
+So wirken die Regeln:
+
+- Die erste passende Regel gewinnt.
+- `Minecraft-Server/Survival` legt einen Unterbereich an.
+- Eine VM erbt den Bereich ihrer Domain, ein NetBird-Gerät den seiner VM.
+- Jeder Bereich bekommt einen Eintrag mit Domains, VMs, Containern und Geräten.
+- Die **Bereiche – Übersicht** zeigt zusätzlich, was noch ohne Bereich ist.
+- Die Seite „Zuordnungsregeln“ wird vom Abgleich nie überschrieben.
+
+## Claude verbinden
+
+In der Zentrale unter *Claude* auf „Claude einrichten“, oder `brainbox-connect claude`. Das legt im Wiki an:
+
+- das Konto **Claude** (Rolle Mitglied)
+- die gemeinsame Sammlung **Von Claude**
+- einen API-Schlüssel
+- eine Anweisung für Claude beim Verbinden
+
+Claude verbindet sich über den eingebauten MCP-Anschluss `https://<deine-domain>/mcp`.
+
+| Wo | Wie |
+|---|---|
+| Claude-App (claude.ai, Handy, Desktop) | Im Browser als Claude anmelden (Login-Link aus der Zentrale). Dann in Claude: Einstellungen → Connectors → Benutzerdefinierten Connector hinzufügen → `https://<deine-domain>/mcp` → Verbinden → Zulassen. Braucht HTTPS aus dem Internet. |
+| Claude Code | `claude mcp add --transport http brainbox https://<deine-domain>/mcp --header "Authorization: Bearer <Schlüssel>"` |
+
+Claude legt keine eigenen Sammlungen an, weil die privat wären. Es schreibt in bestehende Sammlungen oder in **Von Claude**. Abschalten: Einstellungen → Benutzer → Claude sperren.
 
 ## Update
 
-Im Container (Konsole in Proxmox oder `pct enter <ID>`):
+Brainbox sieht alle 6 Stunden selbst nach, ob es eine neue Version gibt. Ist eine da, siehst du das an drei Stellen:
+
+- **im Wiki:** unten in der Seitenleiste erscheint **„Update verfügbar · 1.1.0“** mit Download-Symbol (nur für Admins)
+- **in der Zentrale:** ein Hinweis in der Übersicht und ein Symbol bei „Version & Update“, dort mit **Jetzt aktualisieren**
+- **im Terminal:** die Begrüßung beim Öffnen der Konsole zeigt „Update verfügbar“
+
+Aktualisieren geht per Knopf in der Zentrale oder im Container (Konsole in Proxmox oder `pct enter <ID>`):
 
 ```bash
 update
 ```
 
-Holt das neueste Outline-Release, sichert vorher Datenbank und `.env` nach `/root/brainbox-backups/` (die letzten drei), baut neu und startet den Dienst. Schlägt der Build fehl, läuft automatisch wieder die alte Version.
+Vom Proxmox-Host aus, ohne in den Container zu wechseln:
 
-- `update --check` prüft nur (Exit-Code 10 = Update verfügbar)
-- `update --force` baut auch bei gleicher Version neu
+```bash
+pct exec <ID> -- update
+```
 
-Das Install-Skript im Container aufgerufen startet ebenfalls das Update, genau wie bei den community-scripts.
+So läuft das Update ab:
+
+1. Es sichert Datenbank und `.env` nach `/root/brainbox-backups/` (die letzten drei).
+2. Es holt die neue Brainbox-Version samt dem dazu getesteten Kern, wendet das Brainbox-Design an und baut neu.
+3. Es startet Wiki und Zentrale.
+
+Schlägt der Build fehl, läuft automatisch wieder die alte Version. `brainbox-update` ist derselbe Befehl wie `update`.
+
+Weitere Optionen:
+
+- `update --check` prüft nur (Exit-Code 10 = Update verfügbar).
+- `update --force` baut auch bei gleicher Version neu.
+
+Was sich geändert hat, steht in den [Änderungen](../CHANGELOG.md).
 
 ## Erweiterte Optionen
 
@@ -193,7 +256,7 @@ var_mode=default var_wiki_name="Werkstatt" var_domain=werkstatt.morncloud.de \
 | `var_wiki_name` | `Brainbox` | Name des Wikis |
 | `var_domain` | `brainbox.morncloud.de` | Domain, leer = nur `http://IP:3000` |
 | `var_admin_name` / `var_admin_email` | – | Admin; ohne E-Mail kein automatisches Wiki |
-| `var_pve_sync` | `yes` | `no` = kein Proxmox-Zugang, keine Proxmox-Einträge im Wiki |
+| `var_pve_sync` | `yes` | `no` = diesen Proxmox-Server nicht verbinden |
 | `var_ctid` | nächste freie | Container-ID |
 | `var_hostname` | aus der Domain | Hostname |
 | `var_cpu` / `var_ram` / `var_disk` / `var_swap` | 2 / 4096 / 8 / 512 | Kerne / MB / GB / MB |
@@ -203,5 +266,5 @@ var_mode=default var_wiki_name="Werkstatt" var_domain=werkstatt.morncloud.de \
 | `var_pw` | leer | Root-Passwort (leer = Auto-Login auf der Konsole) |
 | `var_unprivileged` | `1` | `0` = privilegierter Container |
 | `var_verbose` | `no` | `yes` = ausführliche Ausgabe |
-| `BRAINBOX_OUTLINE_VERSION` | neueste | feste Outline-Version, z. B. `v1.12.0` |
 | `BRAINBOX_BRANCH` | `main` | anderen Branch dieses Repos verwenden |
+| `BRAINBOX_OUTLINE_VERSION` | passend zur Brainbox-Version | anderen Wiki-Kern erzwingen, z. B. `v1.12.0` (ungetestet) |

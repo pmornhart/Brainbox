@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # ------------------------------------------------------------------------------
-# Brainbox – Update (im Container einfach "update" eingeben)
-# Holt das neueste Outline-Release, baut es neu und startet den Dienst.
+# Brainbox – Update (im Container einfach "update" oder "brainbox-update" eingeben,
+# vom Proxmox-Host aus: pct exec <CTID> -- update)
+# Holt die neueste Brainbox-Version (Bausatz + dazu getesteter Outline-Kern),
+# wendet das Brainbox-Design an, baut neu und startet Wiki und Zentrale.
 # Vorher wird die Datenbank gesichert; schlägt der Build fehl, wird die alte
 # Version zurückgespielt (wenn genug Speicher frei ist).
 #
@@ -21,6 +23,9 @@ RAW="${BRAINBOX_RAW:-https://raw.githubusercontent.com/${REPO}/${BRANCH}}"
 
 APP_DIR="/opt/brainbox"
 OLD_DIR="/opt/brainbox.old"
+KIT_DIR="/opt/brainbox-kit"
+NEW_KIT="/opt/brainbox-kit.new"
+KIT_URL="${BRAINBOX_KIT_URL:-https://codeload.github.com/${REPO}/tar.gz/refs/heads/${BRANCH}}"
 SERVICE="brainbox"
 VERSION_FILE="/root/.brainbox"
 BACKUP_DIR="/root/brainbox-backups"
@@ -32,7 +37,7 @@ MIN_RAM_MB="4096"
 ROLLBACK_MIN_FREE_MB="4500"
 OUTLINE_REPO="${BRAINBOX_OUTLINE_REPO:-outline/outline}"
 GITHUB="${BRAINBOX_GITHUB:-https://github.com}"
-OUTLINE_VERSION="${BRAINBOX_OUTLINE_VERSION:-}" # leer = neuestes Release
+OUTLINE_VERSION="${BRAINBOX_OUTLINE_VERSION:-}" # leer = der zur Brainbox-Version passende Kern
 
 VERBOSE="${BRAINBOX_VERBOSE:-no}"
 FORCE="no"
@@ -42,7 +47,7 @@ for arg in "$@"; do
   --force) FORCE="yes" ;;
   --check) CHECK_ONLY="yes" ;;
   --verbose | -v) VERBOSE="yes" ;;
-  -h | --help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  -h | --help) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   *) echo "Unbekannte Option: $arg (siehe update --help)"; exit 1 ;;
   esac
 done
@@ -68,10 +73,10 @@ if [[ "$VERBOSE" == "yes" ]]; then STD=""; else STD="silent"; fi
 
 rollback() {
   msg_info "Alte Version wird zurückgespielt"
-  rm -rf "$APP_DIR"
+  rm -rf "$APP_DIR" "$NEW_KIT"
   mv "$OLD_DIR" "$APP_DIR"
   systemctl start "$SERVICE" || true
-  msg_ok "Alte Version läuft wieder ($(cat "$VERSION_FILE" 2>/dev/null || echo '?'))"
+  msg_ok "Alte Version läuft wieder (Brainbox ${CUR_BB:-?})"
 }
 
 error_handler() {
@@ -88,8 +93,8 @@ error_handler() {
   elif [[ "$APP_REPLACED" == "no" && "$SERVICE_STOPPED" == "yes" ]]; then
     # Alte Installation ist noch unverändert – einfach wieder starten
     systemctl start "$SERVICE" || true
-    echo -e "${INFO}${YW}Nichts geändert, ${APP} läuft weiter mit Outline ${CURRENT:-?}.${CL}"
-  elif [[ -n "${LATEST:-}" ]]; then
+    echo -e "${INFO}${YW}Nichts geändert, ${APP} läuft weiter mit Version ${CUR_BB:-?}.${CL}"
+  elif [[ -n "${NEW_BB:-}" ]]; then
     echo -e "${INFO}${YW}Kein Rollback möglich. Erneut versuchen mit: update --force${CL}"
     echo -e "${INFO}${YW}Datenbank-Sicherung liegt in ${BACKUP_DIR}${CL}"
   fi
@@ -150,19 +155,33 @@ self_update() {
   rm -f "$tmp"
 }
 
-# Die Brainbox-Befehle ebenfalls aktuell halten
-update_helpers() {
-  local pair src dst tmp
-  for pair in "brainbox-login.sh:/usr/bin/brainbox-login" "brainbox-connect.sh:/usr/bin/brainbox-connect" "connect/sync.mjs:/opt/brainbox-connect/sync.mjs"; do
-    src="${pair%%:*}"; dst="${pair#*:}"
+# --- Brainbox-Bausatz und Versionen ---------------------------------------------------
+fetch_kit() { # fetch_kit <Zielordner>
+  local dst="$1" tmp
+  rm -rf "$dst"
+  mkdir -p "$dst"
+  if [[ -n "${BRAINBOX_KIT_DIR:-}" && -d "${BRAINBOX_KIT_DIR}" ]]; then
+    cp -a "${BRAINBOX_KIT_DIR}/." "$dst/"
+  else
     tmp="$(mktemp)"
-    if curl -fsSL "${RAW}/${src}" -o "$tmp" 2>/dev/null && [[ -s "$tmp" ]]; then
-      if [[ "$src" == *.mjs ]]; then node --check "$tmp" 2>/dev/null || { rm -f "$tmp"; continue; }; else bash -n "$tmp" 2>/dev/null || { rm -f "$tmp"; continue; }; fi
-      mkdir -p "$(dirname "$dst")"
-      cmp -s "$tmp" "$dst" || install -m 755 "$tmp" "$dst"
-    fi
+    curl -fsSL --retry 3 "$KIT_URL" -o "$tmp"
+    tar -xzf "$tmp" -C "$dst" --strip-components=1
     rm -f "$tmp"
-  done
+  fi
+  rm -rf "$dst/.git"
+  [[ -f "$dst/brainbox.version" ]]
+}
+kit_value() { sed -n "s/^$2=//p" "$1/brainbox.version" | head -n1; }
+installed_value() { # früher stand in /root/.brainbox nur die Outline-Version
+  if grep -q "=" "$VERSION_FILE" 2>/dev/null; then sed -n "s/^$1=//p" "$VERSION_FILE" | head -n1
+  elif [[ "$1" == "OUTLINE_CORE" ]]; then head -n1 "$VERSION_FILE" 2>/dev/null || true; fi
+}
+install_kit() { # neuen Bausatz übernehmen und Befehle, Abgleich, Zentrale einrichten
+  rm -rf "${KIT_DIR}.old"
+  [[ -d "$KIT_DIR" ]] && mv "$KIT_DIR" "${KIT_DIR}.old"
+  mv "$NEW_KIT" "$KIT_DIR"
+  rm -rf "${KIT_DIR}.old"
+  $STD bash "${KIT_DIR}/teile-einrichten.sh"
 }
 
 # --- Ablauf -----------------------------------------------------------------------
@@ -174,30 +193,41 @@ fi
 : >"$LOG"
 
 self_update "$@"
-update_helpers
 
-CURRENT="$(cat "$VERSION_FILE" 2>/dev/null || echo "unbekannt")"
-if [[ -z "$OUTLINE_VERSION" ]]; then
-  LATEST="$(latest_outline_tag)" || { msg_error "Neueste Outline-Version nicht ermittelbar (GitHub erreichbar?)"; exit 1; }
-else
-  LATEST="$OUTLINE_VERSION"
-fi
+msg_info "Neueste Brainbox-Version wird geholt"
+fetch_kit "$NEW_KIT" || { msg_error "Brainbox-Bausatz nicht ladbar (GitHub erreichbar?)"; rm -rf "$NEW_KIT"; exit 1; }
+NEW_BB="$(kit_value "$NEW_KIT" BRAINBOX_VERSION)"
+NEW_CORE="${OUTLINE_VERSION:-$(kit_value "$NEW_KIT" OUTLINE_CORE)}"
+if [[ -z "$NEW_CORE" ]]; then NEW_CORE="$(latest_outline_tag)" || { msg_error "Outline-Version nicht ermittelbar"; exit 1; }; fi
+msg_ok "Neueste Version: Brainbox ${NEW_BB} (Kern: Outline ${NEW_CORE})"
+# für Zentrale, Wiki-Seitenleiste und Begrüßung im Terminal
+mkdir -p /var/lib/brainbox
+printf '{"latest":"%s","latestCore":"%s","checkedAt":"%s","error":null}\n' "$NEW_BB" "$NEW_CORE" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >/var/lib/brainbox/update.json
+CUR_BB="$(installed_value BRAINBOX_VERSION)"; CUR_BB="${CUR_BB:-vor 1.0}"
+CUR_CORE="$(installed_value OUTLINE_CORE)"; CUR_CORE="${CUR_CORE:-unbekannt}"
+CURRENT="$CUR_CORE"
+UP_TO_DATE="no"
+[[ "$CUR_BB" == "$NEW_BB" && "$CUR_CORE" == "$NEW_CORE" ]] && UP_TO_DATE="yes"
 
 if [[ "$CHECK_ONLY" == "yes" ]]; then
-  if [[ "$CURRENT" == "$LATEST" ]]; then
-    msg_ok "${APP} ist aktuell (Outline ${CURRENT})"
+  rm -rf "$NEW_KIT"
+  if [[ "$UP_TO_DATE" == "yes" ]]; then
+    msg_ok "${APP} ist aktuell: ${CUR_BB} (Kern: Outline ${CUR_CORE})"
     exit 0
   fi
-  msg_warn "Update verfügbar: Outline ${CURRENT} → ${LATEST}"
+  msg_warn "Update verfügbar: Brainbox ${CUR_BB} → ${NEW_BB} (Kern: Outline ${CUR_CORE} → ${NEW_CORE})"
   exit 10
 fi
 
-if [[ "$CURRENT" == "$LATEST" && "$FORCE" != "yes" ]]; then
-  msg_ok "${APP} ist aktuell (Outline ${CURRENT})"
+if [[ "$UP_TO_DATE" == "yes" && "$FORCE" != "yes" ]]; then
+  # Gleiche Version: nur Befehle, Abgleich und Zentrale auffrischen
+  install_kit
+  systemctl restart brainbox-zentrale >/dev/null 2>&1 || true
+  msg_ok "${APP} ist aktuell: ${CUR_BB} (Kern: Outline ${CUR_CORE})"
   exit 0
 fi
 
-echo -e "${INFO}${YW}Outline ${CURRENT} → ${LATEST}${CL}"
+echo -e "${INFO}${YW}Brainbox ${CUR_BB} → ${NEW_BB} (Kern: Outline ${CUR_CORE} → ${NEW_CORE})${CL}"
 
 # Ressourcen prüfen (wie check_container_resources/-storage beim Original)
 RAM_MB="$(free -m | awk '/^Mem:/ {print $2}')"
@@ -235,14 +265,18 @@ else
   msg_warn "Wenig Speicher frei (${FREE_MB} MB) – alte Version wird nicht aufgehoben, kein automatisches Rollback."
 fi
 
-msg_info "Outline ${LATEST} wird heruntergeladen"
+msg_info "Wiki-Kern (Outline ${NEW_CORE}) wird geladen"
 APP_REPLACED="yes"
-deploy_outline "$APP_DIR" "$LATEST"
+deploy_outline "$APP_DIR" "$NEW_CORE"
 cp "${BACKUP_DIR}/env-${STAMP}" "${APP_DIR}/.env"
 chmod 600 "${APP_DIR}/.env"
-msg_ok "Outline ${LATEST} heruntergeladen"
+msg_ok "Wiki-Kern geladen"
 
-msg_info "Outline wird gebaut (dauert 5–15 Minuten)"
+msg_info "Brainbox-Design wird angewendet"
+$STD node "${NEW_KIT}/brand/apply.mjs" "$APP_DIR"
+msg_ok "Brainbox-Design angewendet"
+
+msg_info "Brainbox wird gebaut (dauert 5–15 Minuten)"
 cd "$APP_DIR"
 export NODE_ENV=development
 export NODE_OPTIONS="--max-old-space-size=3584"
@@ -250,13 +284,18 @@ export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 $STD yarn install --immutable
 export NODE_ENV=production
 $STD yarn build
-msg_ok "Outline gebaut"
+msg_ok "Brainbox gebaut"
 
-msg_info "Dienst wird gestartet"
+msg_info "Zentrale und Befehle werden eingerichtet"
+install_kit
+msg_ok "Zentrale und Befehle eingerichtet"
+
+msg_info "Wiki und Zentrale werden gestartet"
 systemctl start "$SERVICE"
-msg_ok "Dienst gestartet"
+systemctl restart brainbox-zentrale
+msg_ok "Wiki und Zentrale gestartet"
 
-echo "$LATEST" >"$VERSION_FILE"
+printf 'BRAINBOX_VERSION=%s\nOUTLINE_CORE=%s\n' "$NEW_BB" "$NEW_CORE" >"$VERSION_FILE"
 ROLLBACK_READY="no"
 rm -rf "$OLD_DIR"
 
@@ -265,5 +304,5 @@ $STD yarn cache clean --all || true
 $STD npm cache clean --force || true
 msg_ok "Aufgeräumt"
 
-msg_ok "Update fertig – Outline ${LATEST}"
+msg_ok "Update fertig – Brainbox ${NEW_BB} (Kern: Outline ${NEW_CORE})"
 echo -e "${INFO}${YW}Nach einem Update migriert Outline die Datenbank – die Seite kann 1–2 Minuten brauchen.${CL}"

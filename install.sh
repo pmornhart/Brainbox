@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # ------------------------------------------------------------------------------
 # Brainbox – Installation im Container
-# Installiert die Wissensdatenbank Outline (https://github.com/outline/outline)
-# mit Node.js 26, PostgreSQL 16 und Redis nach /opt/brainbox.
+# Installiert Brainbox: den Wiki-Kern (Outline, https://github.com/outline/outline)
+# mit eigenem Brainbox-Design, die Brainbox-Zentrale und die Brainbox-Befehle,
+# dazu Node.js 26, PostgreSQL 16 und Redis.
 #
 # Wird normalerweise von proxmox/brainbox.sh auf dem Proxmox-Host gestartet.
 # Von Hand in einem frischen Debian-13-Container:
@@ -16,11 +17,13 @@ set -Eeuo pipefail
 APP="Brainbox"
 REPO="pmornhart/Brainbox"
 BRANCH="${BRAINBOX_BRANCH:-main}"
-RAW="${BRAINBOX_RAW:-https://raw.githubusercontent.com/${REPO}/${BRANCH}}"
 
 APP_DIR="/opt/brainbox"
+KIT_DIR="/opt/brainbox-kit"
+KIT_URL="${BRAINBOX_KIT_URL:-https://codeload.github.com/${REPO}/tar.gz/refs/heads/${BRANCH}}"
 SERVICE="brainbox"
-PORT="3000"
+PORT="3000"      # Brainbox-Zentrale (davor) – das Wiki ist hier erreichbar
+CORE_PORT="3100" # Outline-Kern dahinter
 VERSION_FILE="/root/.brainbox"
 CREDS_FILE="/root/brainbox.creds"
 LOG="/root/brainbox-install.log"
@@ -31,7 +34,7 @@ PG_DB_NAME="outline"
 PG_DB_USER="outline"
 OUTLINE_REPO="${BRAINBOX_OUTLINE_REPO:-outline/outline}"
 GITHUB="${BRAINBOX_GITHUB:-https://github.com}"
-OUTLINE_VERSION="${BRAINBOX_OUTLINE_VERSION:-}" # leer = neuestes Release
+OUTLINE_VERSION="${BRAINBOX_OUTLINE_VERSION:-}" # leer = der zur Brainbox-Version passende Kern
 
 VERBOSE="${BRAINBOX_VERBOSE:-no}"
 PW_SET="${BRAINBOX_PW_SET:-no}"
@@ -87,6 +90,28 @@ latest_outline_tag() {
   [[ -n "$tag" ]] || return 1
   echo "$tag"
 }
+
+# Brainbox-Bausatz (Design, Zentrale, Befehle) nach $1 holen:
+# vom Proxmox-Host mitgeschickt, lokal (BRAINBOX_KIT_DIR) oder von GitHub
+fetch_kit() {
+  local dst="$1" tmp
+  rm -rf "$dst"
+  mkdir -p "$dst"
+  if [[ -n "${BRAINBOX_KIT_DIR:-}" && -d "${BRAINBOX_KIT_DIR}" ]]; then
+    cp -a "${BRAINBOX_KIT_DIR}/." "$dst/"
+  elif [[ -f /root/brainbox-kit.tar.gz ]]; then
+    tar -xzf /root/brainbox-kit.tar.gz -C "$dst" --strip-components=1
+    rm -f /root/brainbox-kit.tar.gz
+  else
+    tmp="$(mktemp)"
+    curl -fsSL --retry 3 "$KIT_URL" -o "$tmp"
+    tar -xzf "$tmp" -C "$dst" --strip-components=1
+    rm -f "$tmp"
+  fi
+  rm -rf "$dst/.git"
+  [[ -f "$dst/brainbox.version" ]]
+}
+kit_value() { sed -n "s/^$1=//p" "${KIT_DIR}/brainbox.version" | head -n1; }
 
 # Release-Quellen nach $1 entpacken (Ordner wird vorher geleert)
 deploy_outline() {
@@ -185,14 +210,24 @@ msg_info "Datenbank wird angelegt"
 setup_postgresql_db
 msg_ok "Datenbank angelegt (Zugangsdaten in ${CREDS_FILE})"
 
-msg_info "Outline wird heruntergeladen"
+msg_info "Brainbox-Bausatz wird geladen"
+fetch_kit "$KIT_DIR"
+BB_VERSION="$(kit_value BRAINBOX_VERSION)"
+[[ -n "$OUTLINE_VERSION" ]] || OUTLINE_VERSION="$(kit_value OUTLINE_CORE)"
 if [[ -z "$OUTLINE_VERSION" ]]; then
-  OUTLINE_VERSION="$(latest_outline_tag)" || { msg_error "Neueste Outline-Version nicht ermittelbar (GitHub erreichbar?)"; exit 1; }
+  OUTLINE_VERSION="$(latest_outline_tag)" || { msg_error "Outline-Version nicht ermittelbar (GitHub erreichbar?)"; exit 1; }
 fi
-deploy_outline "$APP_DIR" "$OUTLINE_VERSION"
-msg_ok "Outline ${OUTLINE_VERSION} heruntergeladen"
+msg_ok "Brainbox ${BB_VERSION} (Kern: Outline ${OUTLINE_VERSION})"
 
-msg_info "Outline wird eingerichtet und gebaut (dauert 5–15 Minuten)"
+msg_info "Wiki-Kern (Outline ${OUTLINE_VERSION}) wird geladen"
+deploy_outline "$APP_DIR" "$OUTLINE_VERSION"
+msg_ok "Wiki-Kern geladen"
+
+msg_info "Brainbox-Design wird angewendet"
+$STD node "${KIT_DIR}/brand/apply.mjs" "$APP_DIR"
+msg_ok "Brainbox-Design angewendet (Logo, Farben, Schrift, Zentrale)"
+
+msg_info "Brainbox wird eingerichtet und gebaut (dauert 5–15 Minuten)"
 SECRET_KEY="$(openssl rand -hex 32)"
 UTILS_SECRET="$(openssl rand -hex 32)"
 IP="$(local_ip)"
@@ -206,7 +241,7 @@ sed -i "s#^DATABASE_URL=.*#DATABASE_URL=postgres://${PG_DB_USER}:${PG_DB_PASS}@l
 sed -i "s#^REDIS_URL=.*#REDIS_URL=redis://localhost:6379#" .env
 if [[ -n "$DOMAIN" ]]; then WIKI_URL="https://${DOMAIN}"; else WIKI_URL="http://${IP}:${PORT}"; fi
 sed -i "s#^URL=.*#URL=${WIKI_URL}#" .env
-sed -i "s#^PORT=.*#PORT=${PORT}#" .env
+sed -i "s#^PORT=.*#PORT=${CORE_PORT}#" .env
 sed -i "s#^FORCE_HTTPS=.*#FORCE_HTTPS=false#" .env
 sed -i "s#^DEFAULT_LANGUAGE=.*#DEFAULT_LANGUAGE=de_DE#" .env
 # Slack-Platzhalter aus der Beispielkonfiguration entfernen (sonst zeigt die
@@ -219,58 +254,16 @@ $STD yarn install --immutable
 export NODE_ENV=production
 sed -i "s#^NODE_ENV=.*#NODE_ENV=production#" .env
 $STD yarn build
-echo "$OUTLINE_VERSION" >"$VERSION_FILE"
-msg_ok "Outline eingerichtet und gebaut"
+printf 'BRAINBOX_VERSION=%s\nOUTLINE_CORE=%s\n' "$BB_VERSION" "$OUTLINE_VERSION" >"$VERSION_FILE"
+msg_ok "Brainbox gebaut"
 
-msg_info "Dienst wird angelegt"
-cat <<EOF >/etc/systemd/system/${SERVICE}.service
-[Unit]
-Description=Brainbox (Outline)
-After=network.target postgresql.service redis-server.service
-Wants=postgresql.service redis-server.service
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=${APP_DIR}
-EnvironmentFile=${APP_DIR}/.env
-Environment=COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-ExecStart=/usr/bin/yarn start
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-EOF
-$STD systemctl daemon-reload
-$STD systemctl enable --now "$SERVICE"
-msg_ok "Dienst angelegt"
-
-msg_info "Befehle update, brainbox-login und brainbox-connect werden eingerichtet"
+msg_info "Dienste, Zentrale und Befehle werden eingerichtet"
 apt_install whiptail
-# Vom Proxmox-Host mitgeschickt (/root/brainbox-*.sh), sonst aus dem Repo laden
-install_cmd() { # install_cmd <Datei im Repo> <Ziel>
-  local pushed="/root/brainbox-${1#brainbox-}"
-  if [[ -f "$pushed" ]]; then
-    install -m 755 "$pushed" "$2"
-    rm -f "$pushed"
-  else
-    curl -fsSL "${RAW}/$1" -o "$2"
-    chmod 755 "$2"
-  fi
-}
-install_cmd update.sh /usr/bin/update
-install_cmd brainbox-login.sh /usr/bin/brainbox-login
-install_cmd brainbox-connect.sh /usr/bin/brainbox-connect
-mkdir -p /opt/brainbox-connect /etc/brainbox
-chmod 700 /etc/brainbox
-if [[ -f /root/brainbox-sync.mjs ]]; then
-  install -m 755 /root/brainbox-sync.mjs /opt/brainbox-connect/sync.mjs
-  rm -f /root/brainbox-sync.mjs
-else
-  curl -fsSL "${RAW}/connect/sync.mjs" -o /opt/brainbox-connect/sync.mjs
-  chmod 755 /opt/brainbox-connect/sync.mjs
-fi
-msg_ok "Befehle eingerichtet (im Container: update, brainbox-login, brainbox-connect)"
+$STD bash "${KIT_DIR}/teile-einrichten.sh"
+[[ -n "${BRAINBOX_CTID:-}" ]] && echo "${BRAINBOX_CTID}" >/etc/brainbox/ctid
+$STD systemctl restart "$SERVICE"
+$STD systemctl restart brainbox-zentrale
+msg_ok "Dienste eingerichtet (Wiki und Zentrale auf Port ${PORT}, Befehle: update, brainbox-update, brainbox-login, brainbox-connect)"
 
 LOGIN_LINK=""
 if [[ -n "$ADMIN_EMAIL" ]]; then
@@ -304,13 +297,20 @@ cat <<'EOF' >/etc/profile.d/00_brainbox-motd.sh
 _bb_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
 _bb_url="$(sed -n 's/^URL=//p' /opt/brainbox/.env 2>/dev/null | tr -d "\"'")"
 echo ""
-echo -e "  \033[1;92mBrainbox\033[m · Outline-Wissensdatenbank"
+_bb_ver="$(sed -n 's/^BRAINBOX_VERSION=//p' /root/.brainbox 2>/dev/null)"
+_bb_core="$(sed -n 's/^OUTLINE_CORE=//p' /root/.brainbox 2>/dev/null)"
+echo -e "  \033[1;92mBrainbox ${_bb_ver}\033[m · Wiki fürs Homelab · Kern: Outline ${_bb_core}"
 echo -e "  🌐  Adresse: \033[36m${_bb_url}\033[m (im Heimnetz: http://${_bb_ip}:3000)"
+echo -e "  ⚙️   Zentrale: \033[36m${_bb_url}/zentrale\033[m (Proxmox-Server, NetBird, Claude, Anmeldung, Update)"
 echo -e "  🖥️  $(hostname) · $(. /etc/os-release && echo "$PRETTY_NAME")"
-echo -e "  📦  Outline $(cat /root/.brainbox 2>/dev/null || echo '?') · Update: \033[33mupdate\033[m · Anmeldung: \033[33mbrainbox-login\033[m"
+_bb_new="$(jq -r '.latest // empty' /var/lib/brainbox/update.json 2>/dev/null)"
+if [[ -n "$_bb_new" && "$_bb_new" != "$_bb_ver" && "$(printf '%s\n' "$_bb_ver" "$_bb_new" | sort -V | tail -n1)" == "$_bb_new" ]]; then
+  echo -e "  ⬆️   \033[1;92mUpdate verfügbar: Brainbox ${_bb_new}\033[m – einfach \033[33mupdate\033[m eingeben"
+fi
+echo -e "  📦  Update: \033[33mupdate\033[m (oder brainbox-update) · Anmeldung: \033[33mbrainbox-login\033[m"
 echo -e "  🔑  Login-Link: \033[33mbrainbox-login link\033[m · Claude, Proxmox, NetBird: \033[33mbrainbox-connect\033[m"
 echo ""
-unset _bb_ip _bb_url
+unset _bb_ip _bb_url _bb_ver _bb_core _bb_new
 EOF
 if [[ "$PW_SET" != "yes" ]]; then
   # Ohne Root-Passwort: automatische Anmeldung auf der Proxmox-Konsole (wie beim Original)
@@ -333,8 +333,9 @@ $STD apt-get -y autoclean
 msg_ok "Aufgeräumt"
 
 echo
-msg_ok "${APP} ist installiert!"
+msg_ok "${APP} ${BB_VERSION} ist installiert!"
 echo -e "${INFO}${YW}Adresse:${CL} ${BL}${WIKI_URL}${CL}"
+echo -e "${INFO}${YW}Brainbox-Zentrale:${CL} ${BL}${WIKI_URL}/zentrale${CL} (unten in der Seitenleiste)"
 [[ -n "$DOMAIN" ]] && echo -e "${INFO}${YW}Reverse-Proxy:${CL} ${DOMAIN} → http://${IP}:${PORT} (Websockets an, SSL)"
 [[ "$PVE_SYNC" == "yes" ]] && echo -e "${INFO}${YW}Proxmox-Abgleich:${CL} an – Sammlung 'Proxmox' im Wiki, alle 5 Minuten aktuell"
 if [[ -n "$LOGIN_LINK" ]]; then

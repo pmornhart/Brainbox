@@ -9,11 +9,12 @@
 // Alles ab der Überschrift „Notizen“ gehört dir und bleibt erhalten.
 //
 //   node sync.mjs              abgleichen
-//   node sync.mjs --test pve   nur Verbindung zu Proxmox prüfen
+//   node sync.mjs --test pve [NAME]  Verbindung zu Proxmox prüfen (alle oder einen Server)
 //   node sync.mjs --test netbird
 //   node sync.mjs --quiet      nur Fehler und Änderungen ausgeben
 //
-// Einstellungen: /etc/brainbox/connect.env  ·  Zustand: /var/lib/brainbox-connect/state.json
+// Einstellungen: /etc/brainbox/connect.env, Proxmox-Server: /etc/brainbox/proxmox.json
+// Zustand: /var/lib/brainbox-connect/state.json
 // Lizenz: MIT, siehe LICENSE.
 // -----------------------------------------------------------------------------
 import fs from "node:fs";
@@ -47,7 +48,19 @@ function readEnv(file) {
 }
 const cfg = readEnv(CONF_FILE);
 const OUTLINE_URL = (cfg.OUTLINE_URL || "http://127.0.0.1:3000").replace(/\/$/, "");
-const PVE_URL = (cfg.PVE_URL || "").replace(/\/$/, "");
+const PVE_FILE = process.env.BRAINBOX_PROXMOX_FILE || "/etc/brainbox/proxmox.json";
+// Mehrere Proxmox-Server: [{ name, url, tokenId, secret, insecure, caFile }]
+function loadServers() {
+  try {
+    const list = JSON.parse(fs.readFileSync(PVE_FILE, "utf8"));
+    if (Array.isArray(list)) return list.filter((x) => x && x.name && x.url && x.tokenId && x.secret);
+  } catch { /* noch keine Liste */ }
+  if (cfg.PVE_URL && cfg.PVE_TOKEN_ID && cfg.PVE_TOKEN_SECRET) {
+    return [{ name: "proxmox", url: cfg.PVE_URL, tokenId: cfg.PVE_TOKEN_ID, secret: cfg.PVE_TOKEN_SECRET, insecure: ["1", "yes"].includes(cfg.PVE_INSECURE), caFile: cfg.PVE_CA_FILE || "" }];
+  }
+  return [];
+}
+const SERVERS = loadServers().map((x) => ({ ...x, url: String(x.url).replace(/\/$/, "") }));
 const NB_URL = (cfg.NETBIRD_URL || "").replace(/\/$/, "");
 
 // --- HTTP ----------------------------------------------------------------------
@@ -105,17 +118,17 @@ async function outline(endpoint, body = {}) {
 }
 
 // --- Proxmox-API ---------------------------------------------------------------------
-function pveTls() {
-  const ca = cfg.PVE_CA_FILE && fs.existsSync(cfg.PVE_CA_FILE) ? fs.readFileSync(cfg.PVE_CA_FILE) : undefined;
-  return { ca, insecure: cfg.PVE_INSECURE === "1" || cfg.PVE_INSECURE === "yes" };
+function pveTls(srv) {
+  const ca = srv.caFile && fs.existsSync(srv.caFile) ? fs.readFileSync(srv.caFile) : undefined;
+  return { ca, insecure: !!srv.insecure };
 }
-async function pve(p) {
-  const res = await request(`${PVE_URL}/api2/json${p}`, {
-    headers: { Authorization: `PVEAPIToken=${cfg.PVE_TOKEN_ID}=${cfg.PVE_TOKEN_SECRET}` },
-    ...pveTls(),
+async function pve(srv, p) {
+  const res = await request(`${srv.url}/api2/json${p}`, {
+    headers: { Authorization: `PVEAPIToken=${srv.tokenId}=${srv.secret}` },
+    ...pveTls(srv),
   });
   if (res.status !== 200) {
-    const err = new Error(`Proxmox ${p}: HTTP ${res.status} ${(res.json?.message || res.text || "").toString().slice(0, 120)}`);
+    const err = new Error(`Proxmox „${srv.name}“ ${p}: HTTP ${res.status} ${(res.json?.message || res.text || "").toString().slice(0, 120)}`);
     err.status = res.status;
     throw err;
   }
@@ -179,6 +192,9 @@ async function ensureDoc(state, key, title, collectionId, { parentDocumentId, te
       const d = info?.data;
       if (d && !d.deletedAt) {
         if (d.archivedAt) { await outline("documents.restore", { id: d.id }); say(`  ↺ „${title}“ wiederhergestellt`); }
+        if (parentDocumentId && d.parentDocumentId !== parentDocumentId) {
+          await outline("documents.move", { id: d.id, collectionId, parentDocumentId });
+        }
         known.url = d.url;
         return known;
       }
@@ -226,17 +242,18 @@ const isDomain = (a) => /[a-z]/i.test(a || "") && /\./.test(a || "") && !/\//.te
 const link = (doc, label) => (doc?.url ? `[${esc(label)}](${doc.url})` : esc(label));
 const statusDe = (s) => ({ running: "🟢 läuft", stopped: "⚪ gestoppt", paused: "🟡 pausiert", suspended: "🟡 angehalten" }[s] || s || "–");
 
-async function pveGuests() {
-  const res = await pve("/cluster/resources?type=vm");
+async function pveGuests(srv) {
+  const res = await pve(srv, "/cluster/resources?type=vm");
   const guests = [];
   for (const r of res || []) {
     const g = {
-      vmid: r.vmid, name: r.name || `${r.type}-${r.vmid}`, node: r.node, type: r.type, status: r.status,
+      vmid: r.vmid, uid: `${srv.name}:${r.vmid}`, server: srv.name, pveUrl: srv.url,
+      name: r.name || `${r.type}-${r.vmid}`, node: r.node, type: r.type, status: r.status,
       template: !!r.template, cpus: r.maxcpu, mem: r.maxmem, disk: r.maxdisk, uptime: r.uptime,
       tags: (r.tags || "").split(/[;,]/).map((t) => t.trim()).filter(Boolean), ips: [], notes: "", os: "",
     };
     try {
-      const conf = await pve(`/nodes/${g.node}/${g.type}/${g.vmid}/config`);
+      const conf = await pve(srv, `/nodes/${g.node}/${g.type}/${g.vmid}/config`);
       g.notes = (conf?.description || "").trim();
       g.os = conf?.ostype || "";
       for (const [k, v] of Object.entries(conf || {})) {
@@ -246,10 +263,10 @@ async function pveGuests() {
     if (g.status === "running") {
       try {
         if (g.type === "lxc") {
-          const ifs = await pve(`/nodes/${g.node}/lxc/${g.vmid}/interfaces`);
+          const ifs = await pve(srv, `/nodes/${g.node}/lxc/${g.vmid}/interfaces`);
           for (const i of ifs || []) if (i.name !== "lo" && i.inet) g.ips.push(i.inet.split("/")[0]);
         } else {
-          const ag = await pve(`/nodes/${g.node}/qemu/${g.vmid}/agent/network-get-interfaces`);
+          const ag = await pve(srv, `/nodes/${g.node}/qemu/${g.vmid}/agent/network-get-interfaces`);
           for (const i of ag?.result || []) {
             if (i.name === "lo") continue;
             for (const a of i["ip-addresses"] || []) if (a["ip-address-type"] === "ipv4" && !a["ip-address"].startsWith("127.")) g.ips.push(a["ip-address"]);
@@ -287,16 +304,16 @@ function match(guests, nb) {
     const name = norm(g.name);
     const p = nb.peers.find((p) => [p.hostname, p.name].map(norm).includes(name) || norm(p.dns_label).split(".")[0] === name ||
       (p.network_addresses || []).some((a) => g.ips.includes(String(a.net_ip || "").split("/")[0])));
-    if (p) peerOf.set(g.vmid, p);
+    if (p) peerOf.set(g.uid, p);
   }
   const domainsOf = new Map();
   const add = (vmid, d) => { if (!domainsOf.has(vmid)) domainsOf.set(vmid, new Set()); domainsOf.get(vmid).add(d); };
-  for (const g of guests) for (const d of g.manualDomains) add(g.vmid, d.toLowerCase());
+  for (const g of guests) for (const d of g.manualDomains) add(g.uid, d.toLowerCase());
   for (const d of nb.domains) {
     const label = norm(d.address.replace(/^\*\./, "").split(".")[0]);
     for (const g of guests) {
       const n = norm(g.name);
-      if (n === label || n.endsWith(`-${label}`) || n.startsWith(`${label}-`)) add(g.vmid, d.address);
+      if (n === label || n.endsWith(`-${label}`) || n.startsWith(`${label}-`)) add(g.uid, d.address);
     }
   }
   return { peerOf, domainsOf };
@@ -372,8 +389,8 @@ function classify(rules, guests, nb, peerOf, domainsOf) {
   for (const d of domains.keys()) domainHit.set(d, hit("domain", domainVariants(d)));
   const guestHit = new Map();
   for (const g of guests) {
-    const viaDomains = [...(domainsOf.get(g.vmid) || [])].map((d) => domainHit.get(d.toLowerCase()) || NONE);
-    guestHit.set(g.vmid, best(hit("name", [g.name]), hit("tag", g.tags), ...viaDomains));
+    const viaDomains = [...(domainsOf.get(g.uid) || [])].map((d) => domainHit.get(d.toLowerCase()) || NONE);
+    guestHit.set(g.uid, best(hit("name", [g.name]), hit("tag", g.tags), ...viaDomains));
   }
   const peerHit = new Map();
   const guestOfPeerId = new Map([...peerOf.entries()].map(([vmid, p]) => [p.id, vmid]));
@@ -396,9 +413,18 @@ function classify(rules, guests, nb, peerOf, domainsOf) {
 // --- Abgleich ---------------------------------------------------------------------------------
 async function main() {
   if (TEST === "pve" || TEST === "proxmox") {
-    const v = await pve("/version");
-    const guests = await pve("/cluster/resources?type=vm");
-    say(`ok Proxmox ${v?.version || "?"} · ${guests?.length ?? 0} VMs/Container sichtbar`);
+    const only = args[args.indexOf("--test") + 2];
+    const list = SERVERS.filter((x) => !only || only.startsWith("--") || x.name === only);
+    if (!list.length) throw new Error(only ? `Kein Proxmox-Server „${only}“` : "Kein Proxmox-Server eingetragen");
+    let bad = 0;
+    for (const srv of list) {
+      try {
+        const v = await pve(srv, "/version");
+        const guests = await pve(srv, "/cluster/resources?type=vm");
+        say(`ok Proxmox „${srv.name}“ ${v?.version || "?"} · ${guests?.length ?? 0} VMs/Container sichtbar`);
+      } catch (e) { bad++; say(`Fehler: ${e.message}`); }
+    }
+    if (bad) process.exit(1);
     return;
   }
   if (TEST === "netbird") {
@@ -412,7 +438,7 @@ async function main() {
     return;
   }
 
-  const usePve = !!(PVE_URL && cfg.PVE_TOKEN_ID && cfg.PVE_TOKEN_SECRET);
+  const usePve = SERVERS.length > 0;
   const useNb = !!(NB_URL && cfg.NETBIRD_TOKEN);
   if (!cfg.OUTLINE_API_KEY) { log("Noch nicht eingerichtet: brainbox-connect proxmox bzw. brainbox-connect netbird"); return; }
   if (!usePve && !useNb) { log("Weder Proxmox noch NetBird verbunden – nichts zu tun."); return; }
@@ -422,18 +448,46 @@ async function main() {
   state.docs ||= {};
   state.stats = { created: 0, updated: 0, archived: 0 };
   for (const d of Object.values(state.docs)) d.seen = false;
+  // Alte Einträge aus der Zeit mit nur einem Server (pve:<VMID>) dem ersten Server zuordnen
+  if (usePve) {
+    for (const k of Object.keys(state.docs)) {
+      const m = k.match(/^pve:(\d+)$/);
+      if (m && !state.docs[`pve:${SERVERS[0].name}:${m[1]}`]) { state.docs[`pve:${SERVERS[0].name}:${m[1]}`] = state.docs[k]; delete state.docs[k]; }
+    }
+  }
 
-  const guests = usePve ? await pveGuests() : [];
+  // Proxmox: jeder Server einzeln – fällt einer aus, bleiben seine Einträge stehen
+  const servers = [];
+  const guests = [];
+  for (const srv of SERVERS) {
+    const info = { srv, ok: false, error: "", version: "", nodes: [], guests: [] };
+    try {
+      info.version = (await pve(srv, "/version"))?.version || "";
+      info.nodes = (await pve(srv, "/nodes")) || [];
+      info.guests = await pveGuests(srv);
+      info.ok = true;
+      guests.push(...info.guests);
+    } catch (e) {
+      info.error = e.message;
+      say(`  ! ${e.message}`);
+      for (const [k, d] of Object.entries(state.docs)) if (k.startsWith(`pve:${srv.name}:`) || k === `pvesrv:${srv.name}`) d.seen = true;
+    }
+    servers.push(info);
+  }
   const nb = useNb ? await netbirdData() : { peers: [], networks: [], domains: [] };
   const { peerOf, domainsOf } = match(guests, nb);
-  const pveLink = (g) => `${PVE_URL}/#v1:0:=${g.type === "lxc" ? "lxc" : "qemu"}%2F${g.vmid}`;
+  const pveLink = (g) => `${g.pveUrl}/#v1:0:=${g.type === "lxc" ? "lxc" : "qemu"}%2F${g.vmid}`;
+  const srvTitle = (name) => `${name} (Proxmox-Server)`;
 
   // 1. Sammlungen und alle Einträge sicherstellen (damit Verknüpfungen stimmen)
   let colPve, colNb;
   if (usePve) {
     colPve = await ensureCollection(state, "proxmox", { name: "Proxmox", description: "Alle VMs und Container – automatisch aus Proxmox. Eigene Notizen unter „Notizen“ bleiben erhalten.", color: "#E57000", icon: "server" });
     await ensureDoc(state, "pve:overview", "Proxmox – Übersicht", colPve);
-    for (const g of guests) await ensureDoc(state, `pve:${g.vmid}`, `${g.name} (${g.vmid})`, colPve);
+    for (const info of servers) {
+      const sdoc = await ensureDoc(state, `pvesrv:${info.srv.name}`, srvTitle(info.srv.name), colPve);
+      for (const g of info.guests) await ensureDoc(state, `pve:${g.uid}`, `${g.name} (${g.vmid})`, colPve, { parentDocumentId: sdoc.id });
+    }
   }
   if (useNb) {
     colNb = await ensureCollection(state, "netbird", { name: "NetBird", description: "Geräte, Netzwerke und Domains aus NetBird – automatisch abgeglichen.", color: "#F68330", icon: "globe" });
@@ -441,7 +495,7 @@ async function main() {
     await ensureDoc(state, "nb:domains", "Domains", colNb);
     for (const p of nb.peers) await ensureDoc(state, `nb:${p.id}`, p.name, colNb);
   }
-  const guestOfPeer = new Map([...peerOf.entries()].map(([vmid, p]) => [p.id, guests.find((g) => g.vmid === vmid)]));
+  const guestOfPeer = new Map([...peerOf.entries()].map(([vmid, p]) => [p.id, guests.find((g) => g.uid === vmid)]));
 
   const colAreas = await ensureCollection(state, "areas", { name: "Bereiche", description: "Alles nach Bereichen sortiert – Regeln in „Zuordnungsregeln“, z. B. *.morninghosting.de → Minecraft-Server.", color: "#2F7A5B", icon: "shapes" });
   const rulesDoc = await ensureDoc(state, "area:rules", "Zuordnungsregeln", colAreas, { text: RULES_DEFAULT });
@@ -461,29 +515,45 @@ async function main() {
   // 2. Inhalte schreiben
   if (usePve) {
     for (const g of guests) {
-      const p = peerOf.get(g.vmid);
-      const doms = [...(domainsOf.get(g.vmid) || [])];
+      const p = peerOf.get(g.uid);
+      const doms = [...(domainsOf.get(g.uid) || [])];
       const rows = [
-        ["ID", g.vmid], ["Typ", g.type === "lxc" ? "LXC-Container" : "VM"] , ["Node", g.node], ["Status", g.template ? "📄 Vorlage" : statusDe(g.status)],
+        ["ID", g.vmid], ["Server", link(state.docs[`pvesrv:${g.server}`], g.server)], ["Typ", g.type === "lxc" ? "LXC-Container" : "VM"], ["Node", g.node], ["Status", g.template ? "📄 Vorlage" : statusDe(g.status)],
         ["CPU", g.cpus ? `${g.cpus} Kerne` : "–"], ["RAM", gb(g.mem)], ["Disk", gb(g.disk)], ["Betriebssystem", g.os || "–"],
         ["IP-Adressen", g.ips.join(", ") || "–"], ["Tags", g.tags.join(", ") || "–"],
         ["NetBird", p ? `${link(state.docs[`nb:${p.id}`], p.dns_label || p.name)} · ${p.ip} · ${p.connected ? "🟢 online" : "⚪ offline"}` : "–"],
         ["Domains", doms.map((d) => `[${d}](https://${d.replace(/^\*\./, "")})`).join(", ") || "–"],
-        ["Bereich", areaLink(cls.guestArea.get(g.vmid))],
+        ["Bereich", areaLink(cls.guestArea.get(g.uid))],
         ["Proxmox", `[In Proxmox öffnen](${pveLink(g)})`],
       ];
-      const table = ["| Eigenschaft | Wert |", "|---|---|", ...rows.map(([k, v]) => `| **${k}** | ${["Proxmox", "Domains", "NetBird", "Bereich"].includes(k) ? v : esc(v)} |`)].join("\n");
+      const table = ["| Eigenschaft | Wert |", "|---|---|", ...rows.map(([k, v]) => `| **${k}** | ${["Proxmox", "Domains", "NetBird", "Bereich", "Server"].includes(k) ? v : esc(v)} |`)].join("\n");
       const notes = g.notes ? `\n\n### Beschreibung aus Proxmox\n\n${g.notes.replace(/\r/g, "").split(/\n+/).join("\n\n")}` : "";
-      await writeDoc(state, `pve:${g.vmid}`, `${g.name} (${g.vmid})`, `${table}${notes}`);
+      await writeDoc(state, `pve:${g.uid}`, `${g.name} (${g.vmid})`, `${table}${notes}`);
     }
-    const header = "| ID | Name | Typ | Status | IP | NetBird | Domains | Bereich |\n|---|---|---|---|---|---|---|---|";
-    const lines = guests.map((g) => {
-      const p = peerOf.get(g.vmid);
-      return `| ${g.vmid} | ${link(state.docs[`pve:${g.vmid}`], g.name)} | ${g.type === "lxc" ? "LXC" : "VM"} · ${esc(g.node)} | ${g.template ? "📄 Vorlage" : statusDe(g.status)} | ${esc(g.ips[0] || "–")} | ${p ? (p.connected ? "🟢 " : "⚪ ") + esc(p.dns_label || p.name) : "–"} | ${esc([...(domainsOf.get(g.vmid) || [])].join(", ") || "–")} | ${areaLink(cls.guestArea.get(g.vmid))} |`;
-    });
+    const header = "| Server | ID | Name | Status | IP | NetBird | Domains | Bereich |\n|---|---|---|---|---|---|---|---|";
+    const row = (g, withServer = true) => {
+      const p = peerOf.get(g.uid);
+      return `|${withServer ? ` ${link(state.docs[`pvesrv:${g.server}`], g.server)} |` : ""} ${g.vmid} | ${link(state.docs[`pve:${g.uid}`], g.name)} | ${g.template ? "📄 Vorlage" : statusDe(g.status)} | ${esc(g.ips[0] || "–")} | ${p ? (p.connected ? "🟢 " : "⚪ ") + esc(p.dns_label || p.name) : "–"} | ${esc([...(domainsOf.get(g.uid) || [])].join(", ") || "–")} | ${areaLink(cls.guestArea.get(g.uid))} |`;
+    };
+    const pct = (a, b) => (b ? `${Math.round((a / b) * 100)} %` : "–");
+    for (const info of servers) {
+      const name = info.srv.name;
+      const head = info.ok
+        ? `🟢 **erreichbar** · Proxmox VE ${esc(info.version)} · **${info.guests.length}** VMs und Container, davon **${info.guests.filter((g) => g.status === "running").length}** an`
+        : `🔴 **nicht erreichbar** – ${esc(info.error)}\n\nDie Einträge bleiben stehen, bis der Server wieder antwortet.`;
+      const nodes = info.nodes.length
+        ? `\n\n### Nodes\n\n| Node | Status | CPU | RAM | Läuft seit |\n|---|---|---|---|---|\n${info.nodes.map((n) => `| ${esc(n.node)} | ${n.status === "online" ? "🟢 online" : "⚪ " + esc(n.status || "offline")} | ${pct((n.cpu || 0) * (n.maxcpu || 0), n.maxcpu)} von ${n.maxcpu || "–"} Kernen | ${gb(n.mem)} von ${gb(n.maxmem)} | ${uptime(n.uptime)} |`).join("\n")}`
+        : "";
+      const list = info.guests.length
+        ? `\n\n### VMs und Container\n\n| ID | Name | Status | IP | NetBird | Domains | Bereich |\n|---|---|---|---|---|---|---|\n${info.guests.map((g) => row(g, false)).join("\n")}`
+        : "";
+      await writeDoc(state, `pvesrv:${name}`, srvTitle(name),
+        `${head}\n\n| Eigenschaft | Wert |\n|---|---|\n| **Adresse** | [${esc(info.srv.url)}](${info.srv.url}) |\n| **Zugang** | ${esc(info.srv.tokenId)} (nur lesen) |${nodes}${list}`);
+    }
     const running = guests.filter((g) => g.status === "running").length;
+    const srvRows = servers.map((i) => `| ${link(state.docs[`pvesrv:${i.srv.name}`], i.srv.name)} | ${i.ok ? "🟢 erreichbar" : "🔴 nicht erreichbar"} | ${esc(i.version || "–")} | ${i.nodes.length || "–"} | ${i.guests.length} |`);
     await writeDoc(state, "pve:overview", "Proxmox – Übersicht",
-      `**${guests.length}** VMs und Container, davon **${running}** gerade an.\n\n${header}\n${lines.join("\n")}`);
+      `**${servers.length}** Proxmox-Server · **${guests.length}** VMs und Container, davon **${running}** gerade an. Weitere Server fügst du in der Brainbox-Zentrale unter **Proxmox-Server** hinzu.\n\n| Server | Status | Version | Nodes | VMs/Container |\n|---|---|---|---|---|\n${srvRows.join("\n")}\n\n### Alle VMs und Container\n\n${header}\n${guests.map((g) => row(g)).join("\n")}`);
   }
 
   if (useNb) {
@@ -494,7 +564,7 @@ async function main() {
         ["Weitere DNS-Namen", (p.extra_dns_labels || []).join(", ") || "–"], ["Status", p.connected ? "🟢 online" : "⚪ offline"],
         ["Zuletzt gesehen", p.last_seen ? new Date(p.last_seen).toLocaleString("de-DE", { timeZone: process.env.TZ || "Europe/Berlin" }) : "–"],
         ["Betriebssystem", p.os], ["NetBird-Version", p.version], ["Gruppen", (p.groups || []).map((x) => x.name).join(", ") || "–"],
-        ["Proxmox", g ? link(state.docs[`pve:${g.vmid}`], `${g.name} (${g.vmid})`) : "–"],
+        ["Proxmox", g ? link(state.docs[`pve:${g.uid}`], `${g.name} (${g.vmid})`) : "–"],
         ["Bereich", areaLink(cls.peerArea.get(p.id))],
       ];
       const table = ["| Eigenschaft | Wert |", "|---|---|", ...rows.map(([k, v]) => `| **${k}** | ${["Proxmox", "Bereich"].includes(k) ? v : esc(v || "–")} |`)].join("\n");
@@ -503,13 +573,13 @@ async function main() {
     const online = nb.peers.filter((p) => p.connected).length;
     const peerRows = nb.peers.map((p) => {
       const g = guestOfPeer.get(p.id);
-      return `| ${link(state.docs[`nb:${p.id}`], p.name)} | ${esc(p.ip)} | ${esc(p.dns_label || "–")} | ${p.connected ? "🟢 online" : "⚪ offline"} | ${g ? link(state.docs[`pve:${g.vmid}`], `${g.name} (${g.vmid})`) : "–"} |`;
+      return `| ${link(state.docs[`nb:${p.id}`], p.name)} | ${esc(p.ip)} | ${esc(p.dns_label || "–")} | ${p.connected ? "🟢 online" : "⚪ offline"} | ${g ? link(state.docs[`pve:${g.uid}`], `${g.name} (${g.vmid})`) : "–"} |`;
     });
     await writeDoc(state, "nb:overview", "NetBird – Übersicht",
       `**${nb.peers.length}** Geräte, davon **${online}** online · **${nb.networks.length}** Netzwerke · **${nb.domains.length}** Domains ([Liste](${state.docs["nb:domains"].url}))\n\n| Gerät | NetBird-IP | DNS-Name | Status | Proxmox |\n|---|---|---|---|---|\n${peerRows.join("\n")}`);
     const domRows = nb.domains.map((d) => {
-      const vmids = [...domainsOf.entries()].filter(([, set]) => set.has(d.address)).map(([v]) => guests.find((g) => g.vmid === v)).filter(Boolean);
-      return `| ${esc(d.address)} | ${esc(d.network)} | ${d.enabled ? "an" : "aus"} | ${vmids.map((g) => link(state.docs[`pve:${g.vmid}`], `${g.name} (${g.vmid})`)).join(", ") || "–"} | ${areaLink(cls.domainArea.get(d.address.toLowerCase()))} |`;
+      const vmids = [...domainsOf.entries()].filter(([, set]) => set.has(d.address)).map(([v]) => guests.find((g) => g.uid === v)).filter(Boolean);
+      return `| ${esc(d.address)} | ${esc(d.network)} | ${d.enabled ? "an" : "aus"} | ${vmids.map((g) => link(state.docs[`pve:${g.uid}`], `${g.name} (${g.vmid})`)).join(", ") || "–"} | ${areaLink(cls.domainArea.get(d.address.toLowerCase()))} |`;
     });
     await writeDoc(state, "nb:domains", "Domains",
       `Alle Domains aus den NetBird-Netzwerken und wozu sie gehören. Zuordnung automatisch über den Namen (z. B. **brainbox**.morncloud.de → Gast „brainbox“) oder von Hand mit einer Zeile \`domain: name.example.de\` in den Proxmox-Notizen des Gasts.\n\n| Domain | Netzwerk | Aktiv | Gehört zu | Bereich |\n|---|---|---|---|---|\n${domRows.join("\n") || "| – | – | – | – | – |"}`);
@@ -517,18 +587,18 @@ async function main() {
 
   // Bereiche: je Bereich ein Eintrag mit Domains, VMs/Containern und Geräten
   const inArea = (map, a) => [...map.entries()].filter(([, v]) => v === a).map(([k]) => k);
-  const guestRow = (g) => `| ${link(state.docs[`pve:${g.vmid}`], `${g.name} (${g.vmid})`)} | ${g.template ? "📄 Vorlage" : statusDe(g.status)} | ${esc(g.ips[0] || "–")} | ${esc([...(domainsOf.get(g.vmid) || [])].join(", ") || "–")} |`;
+  const guestRow = (g) => `| ${link(state.docs[`pve:${g.uid}`], `${g.name} (${g.vmid})`)} | ${g.template ? "📄 Vorlage" : statusDe(g.status)} | ${esc(g.ips[0] || "–")} | ${esc([...(domainsOf.get(g.uid) || [])].join(", ") || "–")} |`;
   const peerRow = (p) => `| ${link(state.docs[`nb:${p.id}`], p.name)} | ${esc(p.ip)} | ${p.connected ? "🟢 online" : "⚪ offline"} |`;
   const domainRow = (d) => {
     const info = cls.domains.get(d);
-    const owners = [...(info?.vmids || [])].map((v) => guests.find((g) => g.vmid === v)).filter(Boolean);
-    return `| [${esc(d)}](https://${d.replace(/^\*\./, "")}) | ${esc(info?.source || "–")} | ${owners.map((g) => link(state.docs[`pve:${g.vmid}`], `${g.name} (${g.vmid})`)).join(", ") || "–"} |`;
+    const owners = [...(info?.vmids || [])].map((v) => guests.find((g) => g.uid === v)).filter(Boolean);
+    return `| [${esc(d)}](https://${d.replace(/^\*\./, "")}) | ${esc(info?.source || "–")} | ${owners.map((g) => link(state.docs[`pve:${g.uid}`], `${g.name} (${g.vmid})`)).join(", ") || "–"} |`;
   };
   const section = (title, head, rows) => (rows.length ? `\n\n### ${title}\n\n${head}\n${rows.join("\n")}` : "");
   const summary = [];
   for (const a of cls.areas) {
     const ds = inArea(cls.domainArea, a).sort();
-    const gs = inArea(cls.guestArea, a).map((v) => guests.find((g) => g.vmid === v)).filter(Boolean);
+    const gs = inArea(cls.guestArea, a).map((v) => guests.find((g) => g.uid === v)).filter(Boolean);
     const ps = inArea(cls.peerArea, a).map((id) => nb.peers.find((p) => p.id === id)).filter(Boolean);
     const subs = cls.areas.filter((x) => x.startsWith(`${a}/`) && x.split("/").length === a.split("/").length + 1);
     summary.push({ a, ds, gs, ps });
@@ -544,7 +614,7 @@ async function main() {
   }
   const loose = {
     ds: [...cls.domainArea.entries()].filter(([, v]) => !v).map(([k]) => k).sort(),
-    gs: guests.filter((g) => !cls.guestArea.get(g.vmid)),
+    gs: guests.filter((g) => !cls.guestArea.get(g.uid)),
     ps: nb.peers.filter((p) => !cls.peerArea.get(p.id)),
   };
   const overRows = summary.map(({ a, ds, gs, ps }) => `| ${"  ".repeat(a.split("/").length - 1)}${areaLink(a)} | ${ds.length} | ${gs.length} | ${ps.length} |`);
@@ -552,12 +622,12 @@ async function main() {
     `Alles nach Bereichen sortiert. Bereiche und Muster legst du in den [Zuordnungsregeln](${rulesDoc.url}) fest.\n\n| Bereich | Domains | VMs/Container | NetBird-Geräte |\n|---|---|---|---|\n${overRows.join("\n") || "| – | – | – | – |"}` +
     `\n\n### Noch ohne Bereich\n\n${[
       loose.ds.length ? `**Domains:** ${loose.ds.map(esc).join(", ")}` : "",
-      loose.gs.length ? `**VMs und Container:** ${loose.gs.map((g) => link(state.docs[`pve:${g.vmid}`], g.name)).join(", ")}` : "",
+      loose.gs.length ? `**VMs und Container:** ${loose.gs.map((g) => link(state.docs[`pve:${g.uid}`], g.name)).join(", ")}` : "",
       loose.ps.length ? `**NetBird-Geräte:** ${loose.ps.map((p) => link(state.docs[`nb:${p.id}`], p.name)).join(", ")}` : "",
     ].filter(Boolean).join("\n\n") || "Alles ist einem Bereich zugeordnet. 🎉"}`);
 
   // 3. Verschwundene Einträge archivieren (nicht löschen)
-  if (usePve) await archiveMissing(state, "pve:");
+  if (usePve) { await archiveMissing(state, "pve:"); await archiveMissing(state, "pvesrv:"); }
   if (useNb) await archiveMissing(state, "nb:");
   await archiveMissing(state, "area:");
   for (const d of Object.values(state.docs)) delete d.seen;
@@ -567,7 +637,7 @@ async function main() {
   state.lastRun = new Date().toISOString();
   saveState(state);
   const parts = [];
-  if (usePve) parts.push(`Proxmox: ${guests.length} Gäste`);
+  if (usePve) parts.push(`Proxmox: ${servers.length} Server, ${guests.length} Gäste${servers.some((i) => !i.ok) ? ` (${servers.filter((i) => !i.ok).length} nicht erreichbar)` : ""}`);
   if (useNb) parts.push(`NetBird: ${nb.peers.length} Geräte, ${nb.domains.length} Domains`);
   parts.push(`Bereiche: ${cls.areas.length}`);
   const changes = `${created} neu, ${updated} geändert, ${archived} archiviert`;

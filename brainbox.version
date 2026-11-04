@@ -1,0 +1,4 @@
+# Brainbox-Version und der dazu getestete Outline-Kern.
+# update baut neu, sobald sich eine der beiden Zeilen ändert.
+BRAINBOX_VERSION=1.0.0
+OUTLINE_CORE=v1.12.0
