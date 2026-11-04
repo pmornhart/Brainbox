@@ -55,7 +55,8 @@ _Zuletzt aktualisiert: 04.11.2026_
 
 ## Offen / nächste Schritte
 
-- Philip fragen: nach `main` übernehmen und `v1.0.0` taggen?
+- Erledigt 04.11.2026: Brainbox 1.0.0 nach `main` übernommen, Tag `v1.0.0`. Ab jetzt zeigen Installationen „Update verfügbar“, sobald `brainbox.version` auf `main` hochgezählt wird.
+- Für ein Update an Philips Installationen: Änderung auf `main`, `BRAINBOX_VERSION` erhöhen, `CHANGELOG.md` ergänzen, Tag setzen.
 - Philip: Reverse-Proxy für `brainbox.morncloud.de` → `http://<IP>:3000` mit Websockets, Postfach für Login-Mails, Google-OAuth-Client und Microsoft-App-Registrierung anlegen.
 - Klären: welcher Reverse-Proxy (Nginx Proxy Manager?), welches Postfach.
 - Optional: automatisches Update nachts, eingebautes HTTPS (z. B. Caddy) falls kein Reverse-Proxy vorhanden.
