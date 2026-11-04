@@ -38,6 +38,8 @@ _Zuletzt aktualisiert: 04.11.2026_
   - Zentrale mit echtem Admin-Login: zwei Proxmox-Server, NetBird und Claude über die Formulare, Abgleich (2 Server, 9 Gäste, 6 Geräte, 7 Domains)
   - MCP über die Zentrale: Claude schreibt in „Von Claude“
   - Update-Symbol mit nachgestellter Version 1.1.0, Login-Seite „Bei Brainbox anmelden“ mit allen Anbietern
+  - frische Installation direkt von GitHub `main` (Bausatz über codeload), Update-Prüfung gegen GitHub: „1.0.0 ist aktuell“
+  - Umstieg alte Version (Stand fe2d1eb) → `update` → Brainbox 1.0.0: holt sich das neue Update-Skript selbst, Daten bleiben, neuer Look, Wiki-Bild wird zum Logo (wenn keins gewählt)
 - Live-Demo im Brainbox-Look: https://claude.ai/artifact/TzQ1ou6hZu56fowZwjvbSm. Enthalten sind das Wiki mit 2 Servern und 6 Bereichen und die echte `zentrale/app.html` in einem Shadow-Root (Server hinzufügen legt Einträge an, Update lässt sich durchspielen), dazu Login und Terminal.
 - Nicht getestet: echter Proxmox-Host, echte Proxmox-/NetBird-API, claude.ai-Connector (braucht öffentliche HTTPS-Domain), echte Logins bei Google/Microsoft, echter SMTP-Server, Update von GitHub (nur lokaler Spiegel).
 
