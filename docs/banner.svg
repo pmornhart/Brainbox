@@ -14,5 +14,5 @@
     <path d="M30 34h56M30 58h56M30 82h36" stroke="#14231c" stroke-width="9" stroke-linecap="round"/>
   </g>
   <text x="222" y="122" fill="#e8f2ec" font-family="IBM Plex Sans, Segoe UI, Helvetica, Arial, sans-serif" font-size="64" font-weight="700">Brainbox</text>
-  <text x="224" y="164" fill="#a9c7b6" font-family="IBM Plex Sans, Segoe UI, Helvetica, Arial, sans-serif" font-size="24">Outline-Wissensdatenbank als Proxmox-LXC · ein Befehl</text>
+  <text x="224" y="164" fill="#a9c7b6" font-family="IBM Plex Sans, Segoe UI, Helvetica, Arial, sans-serif" font-size="24">Wiki fürs Homelab · Proxmox · NetBird · Claude</text>
 </svg>

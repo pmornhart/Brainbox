@@ -14,6 +14,9 @@ Outline-Wissensdatenbank als Proxmox-LXC, Nachbau des community-scripts Outline-
 - `brainbox-login.sh` – wird zu `/usr/bin/brainbox-login`; Menü für Adresse, E-Mail, Passkeys, Google, Microsoft, Discord, OIDC, Sprache.
   Nie `login` nennen (würde `/bin/login` verdecken). Dazu `brainbox-login workspace` (Wiki anlegen) und `brainbox-login link` (Login-Link).
 - Ein Container = ein Wiki mit eigener Domain; Wiki und Admin legt die Installation automatisch an.
+- `brainbox-connect.sh` – wird zu `/usr/bin/brainbox-connect`; Claude-Konto, Proxmox, NetBird, Abgleich (`sync`), `status`.
+- `connect/sync.mjs` – Node-Skript ohne Abhängigkeiten, gleicht Proxmox/NetBird ins Wiki ab (Timer alle 5 Min.).
+  Testen mit nachgebauten APIs (Proxmox https mit selbstsigniertem Zertifikat, NetBird http), siehe STAND.md.
 - `docs/proxmox-quickstart.md` – Quick-Start im Stil von community-scripts.org.
 
 ## Regeln
