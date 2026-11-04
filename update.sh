@@ -198,8 +198,8 @@ msg_info "Neueste Brainbox-Version wird geholt"
 fetch_kit "$NEW_KIT" || { msg_error "Brainbox-Bausatz nicht ladbar (GitHub erreichbar?)"; rm -rf "$NEW_KIT"; exit 1; }
 NEW_BB="$(kit_value "$NEW_KIT" BRAINBOX_VERSION)"
 NEW_CORE="${OUTLINE_VERSION:-$(kit_value "$NEW_KIT" OUTLINE_CORE)}"
-if [[ -z "$NEW_CORE" ]]; then NEW_CORE="$(latest_outline_tag)" || { msg_error "Outline-Version nicht ermittelbar"; exit 1; }; fi
-msg_ok "Neueste Version: Brainbox ${NEW_BB} (Kern: Outline ${NEW_CORE})"
+if [[ -z "$NEW_CORE" ]]; then NEW_CORE="$(latest_outline_tag)" || { msg_error "Version des Wiki-Kerns nicht ermittelbar"; exit 1; }; fi
+msg_ok "Neueste Version: Brainbox ${NEW_BB} (Kern ${NEW_CORE#v})"
 # für Zentrale, Wiki-Seitenleiste und Begrüßung im Terminal
 mkdir -p /var/lib/brainbox
 printf '{"latest":"%s","latestCore":"%s","checkedAt":"%s","error":null}\n' "$NEW_BB" "$NEW_CORE" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >/var/lib/brainbox/update.json
@@ -212,10 +212,10 @@ UP_TO_DATE="no"
 if [[ "$CHECK_ONLY" == "yes" ]]; then
   rm -rf "$NEW_KIT"
   if [[ "$UP_TO_DATE" == "yes" ]]; then
-    msg_ok "${APP} ist aktuell: ${CUR_BB} (Kern: Outline ${CUR_CORE})"
+    msg_ok "${APP} ist aktuell: ${CUR_BB} (Kern ${CUR_CORE#v})"
     exit 0
   fi
-  msg_warn "Update verfügbar: Brainbox ${CUR_BB} → ${NEW_BB} (Kern: Outline ${CUR_CORE} → ${NEW_CORE})"
+  msg_warn "Update verfügbar: Brainbox ${CUR_BB} → ${NEW_BB} (Kern ${CUR_CORE#v} → ${NEW_CORE#v})"
   exit 10
 fi
 
@@ -224,11 +224,11 @@ if [[ "$UP_TO_DATE" == "yes" && "$FORCE" != "yes" ]]; then
   install_kit
   systemctl restart brainbox-zentrale >/dev/null 2>&1 || true
   $STD brainbox-connect start --quiet || true
-  msg_ok "${APP} ist aktuell: ${CUR_BB} (Kern: Outline ${CUR_CORE})"
+  msg_ok "${APP} ist aktuell: ${CUR_BB} (Kern ${CUR_CORE#v})"
   exit 0
 fi
 
-echo -e "${INFO}${YW}Brainbox ${CUR_BB} → ${NEW_BB} (Kern: Outline ${CUR_CORE} → ${NEW_CORE})${CL}"
+echo -e "${INFO}${YW}Brainbox ${CUR_BB} → ${NEW_BB} (Kern ${CUR_CORE#v} → ${NEW_CORE#v})${CL}"
 
 # Ressourcen prüfen (wie check_container_resources/-storage beim Original)
 RAM_MB="$(free -m | awk '/^Mem:/ {print $2}')"
@@ -266,7 +266,7 @@ else
   msg_warn "Wenig Speicher frei (${FREE_MB} MB) – alte Version wird nicht aufgehoben, kein automatisches Rollback."
 fi
 
-msg_info "Wiki-Kern (Outline ${NEW_CORE}) wird geladen"
+msg_info "Wiki-Kern ${NEW_CORE#v} wird geladen"
 APP_REPLACED="yes"
 deploy_outline "$APP_DIR" "$NEW_CORE"
 cp "${BACKUP_DIR}/env-${STAMP}" "${APP_DIR}/.env"
@@ -308,5 +308,5 @@ $STD yarn cache clean --all || true
 $STD npm cache clean --force || true
 msg_ok "Aufgeräumt"
 
-msg_ok "Update fertig – Brainbox ${NEW_BB} (Kern: Outline ${NEW_CORE})"
-echo -e "${INFO}${YW}Nach einem Update migriert Outline die Datenbank – die Seite kann 1–2 Minuten brauchen.${CL}"
+msg_ok "Update fertig – Brainbox ${NEW_BB} (Kern ${NEW_CORE#v})"
+echo -e "${INFO}${YW}Nach einem Update richtet Brainbox die Datenbank ein – die Seite kann 1–2 Minuten brauchen.${CL}"

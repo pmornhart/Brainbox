@@ -1,6 +1,6 @@
 # 🧠 Brainbox – Proxmox Quick-Start
 
-Brainbox ist ein Wiki fürs Homelab als LXC-Container auf Proxmox VE. Ein Container ist ein Wiki. Dazu gehören Login-Link, sechs Anmeldewege, die **Brainbox-Zentrale** im Browser, beliebig viele Proxmox-Server, NetBird und Claude als Mitschreiber. Im Kern arbeitet [Outline](https://www.getoutline.com).
+Brainbox ist ein Wiki fürs Homelab als LXC-Container auf Proxmox VE. Ein Container ist ein Wiki. Dazu gehören eine Startseite mit deinem Homelab auf einen Blick, Login-Link, sechs Anmeldewege, aufgeräumte Einstellungen, eine Anleitung im Wiki, beliebig viele Proxmox-Server, NetBird und Claude als Mitschreiber.
 
 ## Installieren
 
@@ -44,7 +44,8 @@ Daraus legt es das Wiki samt Admin an. Am Ende zeigt es einen **Login-Link**, de
 | | |
 |---|---|
 | Weboberfläche | `http://<IP>:3000` |
-| Brainbox-Zentrale | `http://<IP>:3000/zentrale`, oben in der Seitenleiste des Wikis (nur Admins) |
+| Einstellungen | `http://<IP>:3000/settings/brainbox`, oben in der Seitenleiste (Gruppe *Brainbox* nur für Admins) |
+| Anleitung | im Wiki, Sammlung **Start** |
 | Ports | `3000` Zentrale und Tor zum Wiki, `3100` Wiki-Kern (nur intern) |
 | Dienste | `brainbox` (Wiki-Kern), `brainbox-zentrale`, `brainbox-sync.timer` (Abgleich) |
 | Logs | `journalctl -u brainbox -f`, `journalctl -u brainbox-zentrale`, `journalctl -u brainbox-sync` |
@@ -58,11 +59,11 @@ Daraus legt es das Wiki samt Admin an. Am Ende zeigt es einen **Login-Link**, de
 
 ## Hinweise
 
-- **Wartezeit nach der Installation:** Der Wiki-Kern richtet zuerst die Datenbank ein. Solange zeigt die Adresse „Brainbox startet gerade“ – ein bis zwei Minuten.
-- **Erster Login:** über den Login-Link vom Ende der Installation. Ist er abgelaufen oder schon benutzt, holst du einen neuen in der Zentrale (Übersicht → Login-Link) oder im Container mit `brainbox-login link`.
+- **Wartezeit nach der Installation:** Brainbox richtet zuerst die Datenbank ein. Solange zeigt die Adresse „Brainbox startet gerade“ – ein bis zwei Minuten.
+- **Erster Login:** über den Login-Link vom Ende der Installation. Ist er abgelaufen oder schon benutzt, holst du einen neuen unter Einstellungen → Brainbox → Übersicht oder im Container mit `brainbox-login link`.
 - **Ohne Admin-E-Mail** legt das Skript kein Wiki an. Dann zeigt der Browser beim ersten Aufruf „Arbeitsbereich erstellen“.
 - **Mehrere Wikis:** Ein Container ist ein Wiki. Für ein weiteres das Skript erneut ausführen und eine andere Domain eintragen.
-- **Neue IP:** Ändert sich die IP des Containers, trägst du sie in der Zentrale unter Anmeldung ein (oder `brainbox-login` → Adresse).
+- **Neue IP:** Ändert sich die IP des Containers, trägst du sie unter Einstellungen → Brainbox → Anmeldung ein (oder `brainbox-login` → Adresse).
 
 ## HTTPS mit eigener Domain
 
@@ -73,25 +74,30 @@ Passkeys, Google, Microsoft und die Claude-App funktionieren nur über HTTPS mit
 3. Reiter SSL: Let's-Encrypt-Zertifikat, „Force SSL“ an.
 4. Hast du die Domain bei der Installation leer gelassen: im Container `brainbox-login` → **Adresse** → `https://brainbox.morncloud.de`.
 
-## Brainbox-Zentrale
+## Einstellungen
 
-Alle Einstellungen gibt es im Browser. Oben in der Seitenleiste des Wikis findest du **Brainbox-Zentrale**. Jeder Bereich erklärt Schritt für Schritt, was zu tun ist:
+Alle Einstellungen gibt es im Browser: oben in der Seitenleiste unter **Einstellungen**. Es gibt drei Gruppen:
 
-| Bereich | Was du dort machst |
-|---|---|
-| Übersicht | Status aller Verbindungen, jetzt abgleichen, Login-Link erstellen |
-| Proxmox-Server | Server hinzufügen, prüfen, entfernen – mit kopierbaren Befehlen für den Lesezugang |
-| NetBird | API-Adresse und Token eintragen, trennen |
-| Claude | Konto einrichten, Schlüssel und Anleitung für App und Code |
-| Bereiche | Zuordnungsregeln erklärt, Link zur Regel-Seite |
-| Anmeldung | E-Mail, Google, Microsoft, Discord, OIDC – mit Redirect-URIs zum Kopieren |
-| Version & Update | installierte und neueste Version, Update starten, Protokoll |
+| Gruppe | Bereich | Was du dort machst |
+|---|---|---|
+| **Brainbox** (nur Admins) | Übersicht | Status aller Verbindungen, jetzt abgleichen, Login-Link erstellen |
+| | Proxmox-Server | Server hinzufügen, prüfen, entfernen – mit kopierbaren Befehlen für den Lesezugang |
+| | NetBird | API-Adresse und Token eintragen, trennen |
+| | Claude | Konto einrichten, Schlüssel und Anleitung für App und Code |
+| | Anmeldung | E-Mail, Google, Microsoft, Discord, OIDC – mit Redirect-URIs zum Kopieren |
+| | Version & Update | installierte und neueste Version, Update starten, Protokoll |
+| **Wiki** | Allgemein, Mitglieder, Sicherheit, Vorlagen, Export | Name und Bild, Leute einladen, „Einladungen erforderlich“, Vorlagen, Sicherung aller Seiten |
+| **Konto** | Profil, Darstellung, Benachrichtigungen, Passkeys | dein Name, hell oder dunkel, E-Mails, Passkeys |
 
-Im Terminal geht dasselbe mit `brainbox-connect`, `brainbox-login` und `update`.
+Jede Seite der Gruppe *Brainbox* erklärt Schritt für Schritt, was zu tun ist. Im Terminal geht dasselbe mit `brainbox-connect`, `brainbox-login` und `update`.
+
+## Anleitung im Wiki
+
+Die Installation legt die Sammlung **Start** an, mit einer **Anleitung** (Aufbau, Schreiben, Finden, Homelab, Bereiche, Claude, Einladen, Update) und einem **Spickzettel** (Tasten, Schreib-Kürzel, „Wo was ist“, Befehle). Bei jedem Update werden beide aufgefrischt. Hast du eine der Seiten selbst bearbeitet, lässt Brainbox sie, wie sie ist.
 
 ## Anmeldung einrichten
 
-In der Zentrale unter **Anmeldung** oder im Container mit `brainbox-login`. Beides schreibt `/opt/brainbox/.env` und startet den Wiki-Kern neu.
+Unter *Einstellungen → Brainbox → Anmeldung* oder im Container mit `brainbox-login`. Beides schreibt `/opt/brainbox/.env` und startet den Wiki-Kern neu.
 
 | Weg | Was du brauchst | Weiterleitungs-Adresse (Redirect-URI) |
 |---|---|---|
@@ -106,8 +112,8 @@ Ohne Menü: `brainbox-login status`, `brainbox-login link [E-Mail]`, `brainbox-l
 
 Gut zu wissen:
 
-- **Nur mit Einladung:** Rein kommt nur, wer unter Einstellungen → Benutzer eingeladen ist, egal über welchen Weg.
-- **Passkey** legt jeder selbst an: Profil → Einstellungen → Passkeys.
+- **Nur mit Einladung:** Rein kommt nur, wer unter Einstellungen → Wiki → Mitglieder eingeladen ist, egal über welchen Weg.
+- **Passkey** legt jeder selbst an: Einstellungen → Konto → Passkeys.
 - **Microsoft** klappt nur mit Firmen- oder Schulkonten (Microsoft 365 / Entra ID). Private @outlook.com- und @hotmail.com-Konten nehmen E-Mail oder Passkey.
 - **Google:** Private @gmail.com-Konten können beitreten, aber kein neues Wiki anlegen.
 
@@ -115,7 +121,7 @@ Gut zu wissen:
 
 Du kannst beliebig viele Server oder Cluster verbinden. Hast du bei der Installation „Ja“ gewählt, ist der eigene Server schon drin: Der Installer legt auf dem Host den Nutzer `brainbox@pve` mit Rolle **PVEAuditor** (nur Lesen) und den Token `wiki<ID>` an.
 
-**Weiteren Server hinzufügen** – in der Zentrale unter *Proxmox-Server*, oder so:
+**Weiteren Server hinzufügen** – unter *Einstellungen → Brainbox → Proxmox-Server*, oder so:
 
 1. Auf dem neuen Proxmox-Host einen Lesezugang anlegen:
 
@@ -150,7 +156,7 @@ IP-Adressen von VMs kommen über den QEMU-Gast-Agenten, bei Containern direkt.
 
 ## NetBird
 
-In der Zentrale unter *NetBird* oder mit `brainbox-connect netbird`. Du brauchst:
+Unter *Einstellungen → Brainbox → NetBird* oder mit `brainbox-connect netbird`. Du brauchst:
 
 - **API-Adresse:** bei NetBird Cloud `https://api.netbird.io`, selbst gehostet die Adresse deines Management-Servers
 - **Access Token:** Dashboard → Team → Service Users, oder eigenes Profil → Personal Access Tokens
@@ -189,7 +195,7 @@ So wirken die Regeln:
 
 ## Claude verbinden
 
-In der Zentrale unter *Claude* auf „Claude einrichten“, oder `brainbox-connect claude`. Das legt im Wiki an:
+Unter *Einstellungen → Brainbox → Claude* auf „Claude einrichten“, oder `brainbox-connect claude`. Das legt im Wiki an:
 
 - das Konto **Claude** (Rolle Mitglied)
 - die gemeinsame Sammlung **Von Claude**
@@ -200,7 +206,7 @@ Claude verbindet sich über den eingebauten MCP-Anschluss `https://<deine-domain
 
 | Wo | Wie |
 |---|---|
-| Claude-App (claude.ai, Handy, Desktop) | Im Browser als Claude anmelden (Login-Link aus der Zentrale). Dann in Claude: Einstellungen → Connectors → Benutzerdefinierten Connector hinzufügen → `https://<deine-domain>/mcp` → Verbinden → Zulassen. Braucht HTTPS aus dem Internet. |
+| Claude-App (claude.ai, Handy, Desktop) | Im Browser als Claude anmelden (Login-Link aus den Einstellungen). Dann in Claude: Einstellungen → Connectors → Benutzerdefinierten Connector hinzufügen → `https://<deine-domain>/mcp` → Verbinden → Zulassen. Braucht HTTPS aus dem Internet. |
 | Claude Code | `claude mcp add --transport http brainbox https://<deine-domain>/mcp --header "Authorization: Bearer <Schlüssel>"` |
 
 Claude legt keine eigenen Sammlungen an, weil die privat wären. Es schreibt in bestehende Sammlungen oder in **Von Claude**. Abschalten: Einstellungen → Benutzer → Claude sperren.
@@ -210,10 +216,10 @@ Claude legt keine eigenen Sammlungen an, weil die privat wären. Es schreibt in 
 Brainbox sieht alle 6 Stunden selbst nach, ob es eine neue Version gibt. Ist eine da, siehst du das an drei Stellen:
 
 - **im Wiki:** oben in der Seitenleiste erscheint **„Update verfügbar · 1.1.0“** mit Download-Symbol (nur für Admins)
-- **in der Zentrale:** ein Hinweis in der Übersicht und ein Symbol bei „Version & Update“, dort mit **Jetzt aktualisieren**
+- **in den Einstellungen:** ein Hinweis in der Übersicht und auf der Startseite, unter „Version & Update“ mit **Jetzt aktualisieren**
 - **im Terminal:** die Begrüßung beim Öffnen der Konsole zeigt „Update verfügbar“
 
-Aktualisieren geht per Knopf in der Zentrale oder im Container (Konsole in Proxmox oder `pct enter <ID>`):
+Aktualisieren geht per Knopf in den Einstellungen oder im Container (Konsole in Proxmox oder `pct enter <ID>`):
 
 ```bash
 update

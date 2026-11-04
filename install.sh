@@ -215,17 +215,17 @@ fetch_kit "$KIT_DIR"
 BB_VERSION="$(kit_value BRAINBOX_VERSION)"
 [[ -n "$OUTLINE_VERSION" ]] || OUTLINE_VERSION="$(kit_value OUTLINE_CORE)"
 if [[ -z "$OUTLINE_VERSION" ]]; then
-  OUTLINE_VERSION="$(latest_outline_tag)" || { msg_error "Outline-Version nicht ermittelbar (GitHub erreichbar?)"; exit 1; }
+  OUTLINE_VERSION="$(latest_outline_tag)" || { msg_error "Version des Wiki-Kerns nicht ermittelbar (GitHub erreichbar?)"; exit 1; }
 fi
-msg_ok "Brainbox ${BB_VERSION} (Kern: Outline ${OUTLINE_VERSION})"
+msg_ok "Brainbox ${BB_VERSION} (Kern ${OUTLINE_VERSION#v})"
 
-msg_info "Wiki-Kern (Outline ${OUTLINE_VERSION}) wird geladen"
+msg_info "Wiki-Kern ${OUTLINE_VERSION#v} wird geladen"
 deploy_outline "$APP_DIR" "$OUTLINE_VERSION"
 msg_ok "Wiki-Kern geladen"
 
 msg_info "Brainbox-Design wird angewendet"
 $STD node "${KIT_DIR}/brand/apply.mjs" "$APP_DIR"
-msg_ok "Brainbox-Design angewendet (Logo, Farben, Schrift, Zentrale)"
+msg_ok "Brainbox-Design angewendet (Logo, Farben, Schrift, Startseite, Einstellungen)"
 
 msg_info "Brainbox wird eingerichtet und gebaut (dauert 5–15 Minuten)"
 SECRET_KEY="$(openssl rand -hex 32)"
@@ -267,7 +267,7 @@ msg_ok "Dienste eingerichtet (Wiki und Zentrale auf Port ${PORT}, Befehle: updat
 
 LOGIN_LINK=""
 if [[ -n "$ADMIN_EMAIL" ]]; then
-  msg_info "Wiki '${WIKI_NAME}' wird angelegt (Outline startet zum ersten Mal)"
+  msg_info "Wiki '${WIKI_NAME}' wird angelegt (das Wiki startet zum ersten Mal)"
   $STD brainbox-login workspace "$WIKI_NAME" "$ADMIN_NAME" "$ADMIN_EMAIL"
   msg_ok "Wiki '${WIKI_NAME}' angelegt, Admin: ${ADMIN_NAME} <${ADMIN_EMAIL}>"
   if [[ "$FROM_HOST" != "yes" ]]; then
@@ -309,7 +309,7 @@ _bb_url="$(sed -n 's/^URL=//p' /opt/brainbox/.env 2>/dev/null | tr -d "\"'")"
 echo ""
 _bb_ver="$(sed -n 's/^BRAINBOX_VERSION=//p' /root/.brainbox 2>/dev/null)"
 _bb_core="$(sed -n 's/^OUTLINE_CORE=//p' /root/.brainbox 2>/dev/null)"
-echo -e "  \033[1;92mBrainbox ${_bb_ver}\033[m · Wiki fürs Homelab · Kern: Outline ${_bb_core}"
+echo -e "  \033[1;92mBrainbox ${_bb_ver}\033[m · Wiki fürs Homelab · Kern ${_bb_core#v}"
 echo -e "  🌐  Adresse: \033[36m${_bb_url}\033[m (im Heimnetz: http://${_bb_ip}:3000)"
 echo -e "  ⚙️   Einstellungen: \033[36m${_bb_url}/settings/brainbox\033[m (Proxmox-Server, NetBird, Claude, Anmeldung, Update)"
 echo -e "  🖥️  $(hostname) · $(. /etc/os-release && echo "$PRETTY_NAME")"

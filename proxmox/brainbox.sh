@@ -75,7 +75,7 @@ header_info() {
 /_____/_/   \__,_/_/_/ /_/_.___/\____/_/|_|
 
 EOF
-  echo -e "  ${BOLD}Outline-Wissensdatenbank für Proxmox VE${CL}\n"
+  echo -e "  ${BOLD}Brainbox – Wiki fürs Homelab auf Proxmox VE${CL}\n"
 }
 
 msg_info() { CURRENT_MSG="$1"; printf '%s%s%s...%s' "$HOLD" "$YW" "$1" "$CL"; }
@@ -231,7 +231,7 @@ fi
 [[ "$var_mode" == "advanced" ]] && advanced_settings
 is_number "$CTID" && ctid_free "$CTID" || die "Container-ID ${CTID} ist ungültig oder schon vergeben."
 is_number "$DISK" && is_number "$CPU" && is_number "$RAM" || die "Disk, CPU und RAM müssen Zahlen sein."
-((RAM >= 4096)) || msg_warn "Weniger als 4096 MB RAM – der Outline-Build kann abbrechen."
+((RAM >= 4096)) || msg_warn "Weniger als 4096 MB RAM – der Build kann abbrechen."
 summary
 
 # --- Speicher wählen ------------------------------------------------------------

@@ -1,8 +1,8 @@
 <p align="center"><img src="docs/banner.svg" alt="Brainbox – Wiki fürs Homelab" width="760"></p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Brainbox-1.0.0-4CD596?labelColor=0B1410" alt="Brainbox 1.0.0"></a>
-  <img src="https://img.shields.io/badge/Kern-Outline%20v1.12.0-5E7468?labelColor=0B1410" alt="Kern: Outline v1.12.0">
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Brainbox-1.1.0-4CD596?labelColor=0B1410" alt="Brainbox 1.1.0"></a>
+  <img src="https://img.shields.io/badge/Kern-1.12.0-5E7468?labelColor=0B1410" alt="Kern 1.12.0">
   <img src="https://img.shields.io/badge/Proxmox%20VE-8%20%7C%209-e57000?labelColor=0B1410&logo=proxmox&logoColor=white" alt="Proxmox VE 8 | 9">
   <img src="https://img.shields.io/badge/Debian-13-a81d33?labelColor=0B1410&logo=debian&logoColor=white" alt="Debian 13">
   <a href="LICENSE"><img src="https://img.shields.io/badge/Lizenz-MIT-2f7a5b?labelColor=0B1410" alt="Lizenz: MIT"></a>
@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="#-schnellstart">Schnellstart</a> ·
-  <a href="#%EF%B8%8F-brainbox-zentrale">Zentrale</a> ·
+  <a href="#%EF%B8%8F-einstellungen">Einstellungen</a> ·
   <a href="#%EF%B8%8F-proxmox-server">Proxmox</a> ·
   <a href="#-netbird">NetBird</a> ·
   <a href="#%EF%B8%8F-bereiche">Bereiche</a> ·
@@ -21,26 +21,28 @@
   <a href="docs/proxmox-quickstart.md">Quick-Start-Guide</a>
 </p>
 
-<p align="center"><img src="docs/screenshots/hero.png" alt="Brainbox im Stil Homelab-Konsole: Bereich Minecraft-Server am Rechner, Container auf dem Handy" width="900"></p>
+<p align="center"><img src="docs/screenshots/hero.png" alt="Startseite von Brainbox mit Proxmox, NetBird, Bereichen und Version auf einen Blick – am Rechner und auf dem Handy" width="900"></p>
 
 ---
 
 ## ✨ Was Brainbox ist
 
-Brainbox ist ein eigenständiges Wiki für dein Homelab. Im Kern arbeitet [Outline](https://www.getoutline.com) – Editor, Echtzeit-Bearbeitung, Suche. Alles drumherum ist Brainbox: Name, Logo, Aussehen, Versionen, die Zentrale, die Verbindungen zu Proxmox, NetBird und Claude.
+Brainbox ist ein eigenständiges Wiki für dein Homelab: Editor mit Echtzeit-Bearbeitung und Suche, dazu Startseite, Einstellungen, Versionen und die Verbindungen zu Proxmox, NetBird und Claude. Für neue Leute liegt im Wiki gleich eine Anleitung bereit.
 
 | | |
 |---|---|
 | 🎨 **Eigenes Gesicht** | Brainbox-Logo, eigener Name, Schrift Geist und das Farbschema „Homelab-Konsole“ – dunkel als Standard, hell auf Wunsch. |
-| ⚙️ **Brainbox-Zentrale** | Alle Einstellungen im Browser, oben in der Seitenleiste: Proxmox-Server, NetBird, Claude, Bereiche, Anmeldung, Version und Update. Jeder Bereich erklärt Schritt für Schritt, was zu tun ist. |
+| 🏠 **Startseite** | Begrüßung und dein Homelab auf einen Blick: laufende VMs je Server, NetBird-Geräte online, Bereiche, Version – mit Schnellzugriffen. |
+| ⚙️ **Aufgeräumte Einstellungen** | Drei Gruppen statt zwanzig Punkten: *Brainbox* (Proxmox-Server, NetBird, Claude, Anmeldung, Update), *Wiki* und *Konto*. Jede Seite erklärt Schritt für Schritt, was zu tun ist. |
+| 📖 **Anleitung im Wiki** | Sammlung „Start“ mit Anleitung und Spickzettel – liegt nach der Installation bereit und wird bei Updates aufgefrischt. |
 | 🖥️ **Beliebig viele Proxmox-Server** | Jeder Server bekommt eine eigene Seite mit Nodes und Auslastung, darunter je VM und Container ein Eintrag. Neue erscheinen nach spätestens 5 Minuten. |
 | 🌐 **NetBird** | Geräte, Netzwerke und Domains, automatisch mit den passenden VMs verknüpft. |
 | 🗂️ **Bereiche** | Regeln wie `*.morninghosting.de → Minecraft-Server` sortieren Domains, VMs und Geräte, mit Unterbereichen. |
 | 🤖 **Claude schreibt mit** | Eigenes Konto „Claude“ über den MCP-Anschluss, in der Claude-App wie in Claude Code. |
 | 📚 **Ein Container = ein Wiki** | Wiki und Admin legt die Installation an, am Ende gibt es einen Login-Link. Weiteres Wiki: Befehl nochmal, andere Domain. |
 | 🔑 **Sechs Wege zum Anmelden** | E-Mail-Link, Passkey, Google, Microsoft, Discord, eigener Login-Dienst. Rein kommt nur, wer eingeladen ist. |
-| 🏷️ **Eigene Versionen** | Brainbox 1.0.0 mit fest getestetem Kern. Neue Versionen zeigt ein Update-Symbol im Wiki an. `update` sichert vorher alles und kehrt bei Fehlern zur alten Version zurück. |
-| 🇩🇪 **Auf Deutsch** | Oberfläche, Zentrale, Befehle und Anleitungen. |
+| 🏷️ **Eigene Versionen** | Brainbox 1.1.0 mit fest getestetem Kern. Neue Versionen zeigt ein Update-Symbol im Wiki an. `update` sichert vorher alles und kehrt bei Fehlern zur alten Version zurück. |
+| 🇩🇪 **Auf Deutsch** | Oberfläche, Einstellungen, Befehle und Anleitungen. |
 
 ## 🚀 Schnellstart
 
@@ -65,9 +67,10 @@ Das Skript fragt nacheinander:
 Nach 10 bis 20 Minuten steht am Ende:
 
 ```text
-  ✔️  Brainbox 1.0.0 ist installiert!
+  ✔️  Brainbox 1.1.0 ist installiert!
   💡  Adresse: https://brainbox.morncloud.de   (im Heimnetz: http://192.168.1.77:3000)
-  💡  Brainbox-Zentrale: https://brainbox.morncloud.de/zentrale
+  💡  Einstellungen: https://brainbox.morncloud.de/settings/brainbox (oben in der Seitenleiste)
+  💡  Anleitung: im Wiki in der Sammlung 'Start'
   💡  Reverse-Proxy einrichten: brainbox.morncloud.de → http://192.168.1.77:3000  (Websockets an, SSL-Zertifikat)
   💡  Dein Login-Link (einmal benutzbar, 60 Minuten gültig):
         https://brainbox.morncloud.de/auth/redirect?token=eyJhbGci…
@@ -79,42 +82,44 @@ Im Reverse-Proxy (z. B. Nginx Proxy Manager): `brainbox.morncloud.de` → `http:
 
 ### 3. Login-Link anklicken
 
-Du bist als Admin drin. Oben in der Seitenleiste findest du die **Brainbox-Zentrale** – dort verbindest du weitere Proxmox-Server, NetBird und Claude.
+Du bist als Admin drin. Die Startseite zeigt dein Homelab, die Sammlung **Start** erklärt alles Wichtige, und unter **Einstellungen** (oben in der Seitenleiste) verbindest du weitere Proxmox-Server, NetBird und Claude.
 
 > Ausführlich, mit allen Optionen: **[Proxmox Quick-Start-Guide](docs/proxmox-quickstart.md)**
 
-## ⚙️ Brainbox-Zentrale
+## ⚙️ Einstellungen
 
-Unter `/zentrale`, oben in der Seitenleiste als „Brainbox-Zentrale“. Nur Admins kommen hinein.
+Oben in der Seitenleiste unter **Einstellungen**. Statt einer langen Liste gibt es drei Gruppen:
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/zentrale-uebersicht.png" alt="Zentrale: Übersicht mit Kacheln für Proxmox, NetBird, Claude, Bereiche, Anmeldung und Version"></td>
-    <td width="50%"><img src="docs/screenshots/zentrale-proxmox.png" alt="Zentrale: Proxmox-Server mit Liste und Formular zum Hinzufügen"></td>
+    <td width="50%"><img src="docs/screenshots/einstellungen.png" alt="Einstellungen: Gruppen Brainbox, Wiki und Konto, rechts die Übersicht mit Kacheln für Proxmox, NetBird, Claude und Version"></td>
+    <td width="50%"><img src="docs/screenshots/einstellungen-proxmox.png" alt="Einstellungen → Proxmox-Server: verbundene Server und Formular zum Hinzufügen"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Übersicht: alles auf einen Blick, letzter Abgleich, Login-Link erstellen</sub></td>
-    <td align="center"><sub>Proxmox-Server: verbundene Server, „Prüfen“, „Entfernen“, neuen hinzufügen</sub></td>
+    <td align="center"><sub>Übersicht: alles auf einen Blick, Abgleich, Login-Link</sub></td>
+    <td align="center"><sub>Proxmox-Server: prüfen, entfernen, neuen hinzufügen</sub></td>
   </tr>
 </table>
 
-| Bereich | Was du dort machst |
+| Gruppe | Darin |
 |---|---|
-| **Übersicht** | Status aller Verbindungen, jetzt abgleichen, Login-Link für dich oder Eingeladene |
-| **Proxmox-Server** | beliebig viele Server verbinden, prüfen, entfernen – mit kopierbaren Befehlen für den Lesezugang |
-| **NetBird** | API-Adresse und Token eintragen, trennen |
-| **Claude** | Konto einrichten, Schlüssel und fertige Anleitung für App und Code |
-| **Bereiche** | erklärt die Zuordnungsregeln, öffnet die Regel-Seite im Wiki |
-| **Anmeldung** | E-Mail-Postfach, Google, Microsoft, Discord, eigener Login-Dienst – mit Redirect-URIs zum Kopieren |
-| **Version & Update** | Brainbox-Version und Kern, nach Updates suchen, Update starten, Protokoll |
+| **Brainbox** (nur Admins) | Übersicht · Proxmox-Server · NetBird · Claude · Anmeldung · Version & Update |
+| **Wiki** | Allgemein · Mitglieder · Sicherheit · Vorlagen · Export |
+| **Konto** | Profil · Darstellung · Benachrichtigungen · Passkeys |
 
-Alles geht auch im Terminal des Containers: `brainbox-connect`, `brainbox-login`, `update`.
+Slack, Zapier, Webhooks, GitHub, Analytics, Gruppen, Emojis, API-Schlüssel und Integrationen sind ausgeblendet – ein Homelab-Wiki braucht sie nicht. Alles aus der Gruppe *Brainbox* geht auch im Terminal des Containers: `brainbox-connect`, `brainbox-login`, `update`.
+
+## 📖 Anleitung im Wiki
+
+Nach der Installation liegt in der Sammlung **Start** eine kurze **Anleitung** (Aufbau, Schreiben, Finden, Homelab, Bereiche, Claude, Einladen, Update) und ein **Spickzettel** mit Tasten, Schreib-Kürzeln, „Wo was ist“ und den Befehlen im Container. Bei jedem Update frischt Brainbox beide auf – hast du sie selbst bearbeitet, bleiben sie, wie sie sind.
+
+<p align="center"><img src="docs/screenshots/anleitung.png" alt="Die Anleitung im Wiki, Sammlung Start" width="760"></p>
 
 ## 🖥️ Proxmox-Server
 
 Beliebig viele Server oder Cluster – zu Hause, im Keller, bei Hetzner. Jeder bekommt im Wiki eine eigene Seite mit Nodes, CPU, RAM und Laufzeit, darunter je VM und Container ein Eintrag mit Status, Ressourcen, IP-Adressen, Tags, NetBird-Gerät, Domains, Bereich und Link zurück zu Proxmox.
 
-**Neuen Server verbinden** – in der Zentrale unter *Proxmox-Server* oder im Terminal:
+**Neuen Server verbinden** – unter *Einstellungen → Brainbox → Proxmox-Server* oder im Terminal:
 
 ```bash
 # 1. auf dem neuen Proxmox-Host: Lesezugang anlegen (Rolle PVEAuditor)
@@ -144,7 +149,7 @@ brainbox-connect proxmox add hetzner https://203.0.113.10:8006 'brainbox@pve!wik
 
 ## 🌐 NetBird
 
-In der Zentrale unter *NetBird* (oder `brainbox-connect netbird`) API-Adresse und Access Token eintragen. Danach stehen alle Geräte im Wiki – online/offline, NetBird-IP, DNS-Name, Gruppen – plus eine Liste aller **Domains** aus deinen NetBird-Netzwerken. Gerät und VM werden über gleichen Namen oder gleiche IP verknüpft.
+Unter *Einstellungen → Brainbox → NetBird* (oder `brainbox-connect netbird`) API-Adresse und Access Token eintragen. Danach stehen alle Geräte im Wiki – online/offline, NetBird-IP, DNS-Name, Gruppen – plus eine Liste aller **Domains** aus deinen NetBird-Netzwerken. Gerät und VM werden über gleichen Namen oder gleiche IP verknüpft.
 
 ## 🗂️ Bereiche
 
@@ -169,7 +174,7 @@ Muster: Domains mit `*`, `name:mc-*` für Namen, `tag:` für Proxmox-Tags, `grup
 
 ## 🤖 Claude
 
-In der Zentrale unter *Claude* auf „Claude einrichten“ (oder `brainbox-connect claude`). Brainbox legt das Konto „Claude“ und die gemeinsame Sammlung „Von Claude“ an, erstellt einen Schlüssel und gibt Claude beim Verbinden eine Anweisung mit: auf Deutsch, erst suchen, dann ergänzen, keine Passwörter.
+Unter *Einstellungen → Brainbox → Claude* auf „Claude einrichten“ (oder `brainbox-connect claude`). Brainbox legt das Konto „Claude“ und die gemeinsame Sammlung „Von Claude“ an, erstellt einen Schlüssel und gibt Claude beim Verbinden eine Anweisung mit: auf Deutsch, erst suchen, dann ergänzen, keine Passwörter.
 
 - **Claude-App:** Einstellungen → Connectors → `https://brainbox.morncloud.de/mcp`, im Anmeldefenster als Claude zulassen
 - **Claude Code:** `claude mcp add --transport http brainbox https://brainbox.morncloud.de/mcp --header "Authorization: Bearer …"`
@@ -178,13 +183,11 @@ In der Zentrale unter *Claude* auf „Claude einrichten“ (oder `brainbox-conne
 
 ## 🔑 Anmelden
 
-<img src="docs/screenshots/login.png" alt="Login-Seite von Brainbox" width="400" align="right">
-
-In der Zentrale unter *Anmeldung* oder mit `brainbox-login`.
+Unter *Einstellungen → Brainbox → Anmeldung* oder mit `brainbox-login`.
 
 | Weg | Braucht |
 |---|---|
-| Login-Link | nichts – aus der Installation oder der Zentrale |
+| Login-Link | nichts – aus der Installation oder den Einstellungen |
 | E-Mail | Postfach mit App-Passwort (Gmail, GMX, web.de …) |
 | Passkey | HTTPS mit Domain |
 | Google | OAuth-Client bei Google |
@@ -192,17 +195,17 @@ In der Zentrale unter *Anmeldung* oder mit `brainbox-login`.
 | Discord | App bei Discord |
 | OIDC | eigener Login-Dienst (Pocket ID, Authentik …) |
 
-Rein kommt nur, wer unter Einstellungen → Benutzer eingeladen ist – egal über welchen Weg.
+Rein kommt nur, wer unter *Einstellungen → Wiki → Mitglieder* eingeladen ist – egal über welchen Weg.
 
-<br clear="right">
+<p align="center"><img src="docs/screenshots/login.png" alt="Anmeldeseite von Brainbox mit Markenleiste und allen Anmeldewegen" width="760"></p>
 
 ## 🏷️ Versionen und Update
 
-Brainbox hat eigene Versionen ([Änderungen](CHANGELOG.md)). Zu jeder gehört ein fest getesteter Outline-Kern – in der Datei [`brainbox.version`](brainbox.version).
+Brainbox hat eigene Versionen ([Änderungen](CHANGELOG.md)). Zu jeder gehört ein fest getesteter Wiki-Kern – in der Datei [`brainbox.version`](brainbox.version).
 
-**Update-Symbol:** Brainbox sieht alle 6 Stunden selbst nach. Gibt es eine neue Version, erscheint oben in der Seitenleiste **„Update verfügbar · 1.1.0“**. Ein Klick darauf öffnet die Zentrale, dort startet **Jetzt aktualisieren** das Update. Auch die Begrüßung im Terminal sagt Bescheid.
+**Update-Symbol:** Brainbox sieht alle 6 Stunden selbst nach. Gibt es eine neue Version, erscheint oben in der Seitenleiste **„Update verfügbar“** und auf der Startseite ein Hinweis. Ein Klick führt zu *Einstellungen → Brainbox → Version & Update*, dort startet **Jetzt aktualisieren** das Update. Auch die Begrüßung im Terminal sagt Bescheid.
 
-<p align="center"><img src="docs/screenshots/update-symbol.png" alt="Update-Symbol oben in der Seitenleiste und Hinweis in der Zentrale" width="900"></p>
+<p align="center"><img src="docs/screenshots/update-symbol.png" alt="Update-Symbol oben in der Seitenleiste und die Seite Version & Update in den Einstellungen" width="900"></p>
 
 **Update-Befehl** – im Container oder vom Proxmox-Host aus:
 
@@ -223,7 +226,7 @@ flowchart LR
   RP --> Z
   subgraph CT["LXC-Container 'brainbox'"]
     direction TB
-    Z["Brainbox-Zentrale<br/>Port 3000"] --> K["Wiki-Kern (Outline)<br/>mit Brainbox-Design · Port 3100"]
+    Z["Zentrale und Tor<br/>Port 3000"] --> K["Wiki-Kern<br/>mit Brainbox-Design · Port 3100"]
     K --- DB[("PostgreSQL 16 · Redis")]
     S["Abgleich<br/>alle 5 Minuten"] --> K
   end
@@ -240,6 +243,7 @@ flowchart LR
 | `brainbox-connect proxmox add NAME URL TOKEN-ID SECRET [--insecure]` | weiteren Proxmox-Server verbinden |
 | `brainbox-connect proxmox list` / `remove NAME` / `test` | Server anzeigen, entfernen, prüfen |
 | `brainbox-connect sync` | sofort abgleichen |
+| `brainbox-connect start` | Anleitung im Wiki und Abgleich einrichten (machen Installation und Update von selbst) |
 | `brainbox-login` | Anmeldewege einrichten |
 | `brainbox-login link [E-Mail]` | einmaliger Login-Link, 60 Minuten |
 | `update` (oder `brainbox-update`) | Brainbox aktualisieren, `--check` nur nachsehen |
@@ -250,9 +254,9 @@ flowchart LR
 
 | Was | Wo |
 |---|---|
-| Brainbox-Zentrale und Tor zum Wiki | Port `3000` (Dienst `brainbox-zentrale`) |
+| Zentrale und Tor zum Wiki | Port `3000` (Dienst `brainbox-zentrale`) |
 | Wiki-Kern | Port `3100` (Dienst `brainbox`), `/opt/brainbox` |
-| Brainbox-Bausatz (Design, Zentrale, Befehle) | `/opt/brainbox-kit` |
+| Brainbox-Bausatz (Design, Zentrale, Anleitung, Befehle) | `/opt/brainbox-kit` |
 | Version | `/root/.brainbox`, letzte Update-Prüfung `/var/lib/brainbox/update.json` |
 | Einstellungen des Kerns | `/opt/brainbox/.env` |
 | Proxmox-Server | `/etc/brainbox/proxmox.json` (nur root) |
@@ -266,16 +270,16 @@ flowchart LR
 ## 🔒 Sicherheit
 
 - **Nur mit Einladung:** Die Installation schaltet „Einladungen erforderlich“ ein.
-- **Zentrale nur für Admins:** Sie prüft die Anmeldung im Wiki und nimmt Änderungen nur von der eigenen Seite an.
+- **Brainbox-Einstellungen nur für Admins:** Die Zentrale prüft die Anmeldung im Wiki und nimmt Änderungen nur von der eigenen Seite an.
 - **Proxmox nur lesen:** Zugang `brainbox@pve` mit Rolle PVEAuditor, eigener Token je Wiki.
 - **Geheimnisse bleiben im Container:** Tokens und Schlüssel liegen nur für root lesbar in `/etc/brainbox/`, nie im Wiki.
 - **Login-Links** gelten einmal und 60 Minuten.
 
 ## ❓ Häufige Fragen
 
-<details><summary>Ist Brainbox ein Outline-Fork?</summary>
+<details><summary>Worauf baut Brainbox auf?</summary>
 
-Brainbox baut den offiziellen Outline-Kern bei jeder Installation und jedem Update aus dem Original-Release und legt sein eigenes Gesicht darüber (Name, Logo, Farben, Schrift, Zentrale). Der Kern selbst wird nicht verändert und bleibt aktualisierbar. Brainbox ist kein offizielles Outline-Produkt.
+Der Wiki-Kern ist [Outline](https://github.com/outline/outline). Brainbox baut ihn bei jeder Installation und jedem Update aus dem Original-Release und legt sein eigenes Gesicht darüber: Name, Logo, Farben, Schrift, Startseite, Einstellungen, Anmeldeseite. Der Kern bleibt dabei aktualisierbar. Brainbox ist kein offizielles Outline-Produkt.
 </details>
 
 <details><summary>Kann ich mich mit einem privaten Outlook-Konto anmelden?</summary>
