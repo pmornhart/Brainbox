@@ -335,7 +335,7 @@ msg_ok "Aufgeräumt"
 echo
 msg_ok "${APP} ${BB_VERSION} ist installiert!"
 echo -e "${INFO}${YW}Adresse:${CL} ${BL}${WIKI_URL}${CL}"
-echo -e "${INFO}${YW}Brainbox-Zentrale:${CL} ${BL}${WIKI_URL}/zentrale${CL} (unten in der Seitenleiste)"
+echo -e "${INFO}${YW}Brainbox-Zentrale:${CL} ${BL}${WIKI_URL}/zentrale${CL} (oben in der Seitenleiste)"
 [[ -n "$DOMAIN" ]] && echo -e "${INFO}${YW}Reverse-Proxy:${CL} ${DOMAIN} → http://${IP}:${PORT} (Websockets an, SSL)"
 [[ "$PVE_SYNC" == "yes" ]] && echo -e "${INFO}${YW}Proxmox-Abgleich:${CL} an – Sammlung 'Proxmox' im Wiki, alle 5 Minuten aktuell"
 if [[ -n "$LOGIN_LINK" ]]; then
