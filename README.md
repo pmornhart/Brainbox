@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/Claude-MCP-8b5cf6" alt="Claude über MCP">
 </p>
 
-<p align="center"><b>Dein Wiki fürs Homelab.</b> Ein Befehl in der Proxmox-Shell, und es steht: auf Deutsch, mit Login-Link für dich,<br>jede VM und jedes NetBird-Gerät automatisch drin, und Claude schreibt mit eigenem Konto mit.</p>
+<p align="center"><b>Dein Wiki fürs Homelab.</b> Ein Befehl in der Proxmox-Shell, und es steht: auf Deutsch, mit Login-Link für dich,<br>jede VM und jedes NetBird-Gerät automatisch drin, nach Bereichen sortiert, und Claude schreibt mit eigenem Konto mit.</p>
 
 <p align="center">
   <a href="#-schnellstart">Schnellstart</a> ·
@@ -17,10 +17,11 @@
   <a href="#-anmelden">Anmelden</a> ·
   <a href="#-claude-verbinden">Claude</a> ·
   <a href="#%EF%B8%8F-proxmox-und-netbird-im-wiki">Proxmox &amp; NetBird</a> ·
+  <a href="#%EF%B8%8F-bereiche">Bereiche</a> ·
   <a href="docs/proxmox-quickstart.md">Quick-Start-Guide</a>
 </p>
 
-<p align="center"><img src="docs/screenshots/hero.png" alt="Brainbox am Rechner und auf dem Handy: Proxmox-Übersicht und Eintrag eines Containers" width="900"></p>
+<p align="center"><img src="docs/screenshots/hero.png" alt="Brainbox am Rechner und auf dem Handy: Bereich Minecraft-Server und Eintrag des Containers mc-survival" width="900"></p>
 
 ---
 
@@ -107,7 +108,7 @@ flowchart LR
   VMs -.-> API
   API --> SY
   NB --> SY
-  SY -- "Einträge anlegen<br/>und aktualisieren" --> OL
+  SY -- "Einträge anlegen, aktualisieren<br/>und nach Bereichen sortieren" --> OL
 ```
 
 ## 🔑 Anmelden
@@ -191,9 +192,9 @@ flowchart LR
 - **Deine Notizen:** Alles ab der Überschrift „Notizen“ bleibt bei jedem Abgleich erhalten.
 - **Domain von Hand zuordnen:** in Proxmox in die Notizen des Gasts eine Zeile `domain: kino.morncloud.de` schreiben.
 
-## 🗂️ Bereiche: alles schön unterteilt
+## 🗂️ Bereiche
 
-In der Sammlung **Bereiche** liegt die Seite **Zuordnungsregeln**. Die bearbeitest du direkt im Wiki, eine Zeile pro Regel:
+Alles schön unterteilt: In der Sammlung **Bereiche** liegt die Seite **Zuordnungsregeln**. Die bearbeitest du direkt im Wiki, eine Zeile pro Regel:
 
 | Muster | Bereich |
 |---|---|
