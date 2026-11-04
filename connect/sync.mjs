@@ -1,0 +1,577 @@
+#!/usr/bin/env node
+// -----------------------------------------------------------------------------
+// Brainbox-Abgleich: Proxmox und NetBird → Wiki
+//
+// Legt für jede VM, jeden Container, jedes NetBird-Gerät und jede Domain einen
+// Wiki-Eintrag an, hält ihn aktuell und verknüpft, was zusammengehört.
+// Über die Wiki-Seite „Zuordnungsregeln“ (Sammlung „Bereiche“) ordnest du
+// Domains, VMs und Geräte Bereichen zu, z. B. *.morninghosting.de → Minecraft-Server.
+// Alles ab der Überschrift „Notizen“ gehört dir und bleibt erhalten.
+//
+//   node sync.mjs              abgleichen
+//   node sync.mjs --test pve   nur Verbindung zu Proxmox prüfen
+//   node sync.mjs --test netbird
+//   node sync.mjs --quiet      nur Fehler und Änderungen ausgeben
+//
+// Einstellungen: /etc/brainbox/connect.env  ·  Zustand: /var/lib/brainbox-connect/state.json
+// Lizenz: MIT, siehe LICENSE.
+// -----------------------------------------------------------------------------
+import fs from "node:fs";
+import path from "node:path";
+import http from "node:http";
+import https from "node:https";
+import crypto from "node:crypto";
+
+const CONF_FILE = process.env.BRAINBOX_CONNECT_ENV || "/etc/brainbox/connect.env";
+const STATE_FILE = process.env.BRAINBOX_CONNECT_STATE || "/var/lib/brainbox-connect/state.json";
+const args = process.argv.slice(2);
+const QUIET = args.includes("--quiet");
+const TEST = args.includes("--test") ? args[args.indexOf("--test") + 1] : null;
+
+const log = (...a) => { if (!QUIET) console.log(...a); };
+const say = (...a) => console.log(...a);
+
+// --- Einstellungen -------------------------------------------------------------
+function readEnv(file) {
+  const out = {};
+  if (!fs.existsSync(file)) return out;
+  for (const raw of fs.readFileSync(file, "utf8").split("\n")) {
+    const m = raw.match(/^\s*([A-Z][A-Z0-9_]*)=(.*)$/);
+    if (!m) continue;
+    let v = m[2].trim();
+    if (v.length >= 2 && v.startsWith("'") && v.endsWith("'")) v = v.slice(1, -1);
+    else if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+    out[m[1]] = v;
+  }
+  return out;
+}
+const cfg = readEnv(CONF_FILE);
+const OUTLINE_URL = (cfg.OUTLINE_URL || "http://127.0.0.1:3000").replace(/\/$/, "");
+const PVE_URL = (cfg.PVE_URL || "").replace(/\/$/, "");
+const NB_URL = (cfg.NETBIRD_URL || "").replace(/\/$/, "");
+
+// --- HTTP ----------------------------------------------------------------------
+function request(url, { method = "GET", headers = {}, body, ca, insecure = false, timeout = 30000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const lib = u.protocol === "https:" ? https : http;
+    const data = body === undefined ? undefined : Buffer.from(typeof body === "string" ? body : JSON.stringify(body));
+    const opts = {
+      method,
+      headers: { Accept: "application/json", ...headers, ...(data ? { "Content-Type": "application/json", "Content-Length": data.length } : {}) },
+      timeout,
+    };
+    if (u.protocol === "https:") {
+      if (ca) opts.ca = ca;
+      if (insecure) opts.rejectUnauthorized = false;
+    }
+    const req = lib.request(u, opts, (res) => {
+      const chunks = [];
+      res.on("data", (c) => chunks.push(c));
+      res.on("end", () => {
+        const text = Buffer.concat(chunks).toString("utf8");
+        let json = null;
+        try { json = text ? JSON.parse(text) : null; } catch { /* kein JSON */ }
+        resolve({ status: res.statusCode, headers: res.headers, json, text });
+      });
+    });
+    req.on("timeout", () => req.destroy(new Error(`Zeitüberschreitung bei ${u.host}`)));
+    req.on("error", reject);
+    if (data) req.write(data);
+    req.end();
+  });
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// --- Outline-API ------------------------------------------------------------------
+async function outline(endpoint, body = {}) {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const res = await request(`${OUTLINE_URL}/api/${endpoint}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${cfg.OUTLINE_API_KEY}` },
+      body,
+    });
+    if (res.status === 429) {
+      const wait = Number(res.headers["retry-after"] || 0) * 1000 || 5000 * (attempt + 1);
+      await sleep(Math.min(wait, 60000));
+      continue;
+    }
+    if (res.status >= 200 && res.status < 300) return res.json;
+    const err = new Error(`Wiki ${endpoint}: HTTP ${res.status} ${res.json?.message || res.text.slice(0, 120)}`);
+    err.status = res.status;
+    throw err;
+  }
+  throw new Error(`Wiki ${endpoint}: zu viele Anfragen, später erneut versuchen`);
+}
+
+// --- Proxmox-API ---------------------------------------------------------------------
+function pveTls() {
+  const ca = cfg.PVE_CA_FILE && fs.existsSync(cfg.PVE_CA_FILE) ? fs.readFileSync(cfg.PVE_CA_FILE) : undefined;
+  return { ca, insecure: cfg.PVE_INSECURE === "1" || cfg.PVE_INSECURE === "yes" };
+}
+async function pve(p) {
+  const res = await request(`${PVE_URL}/api2/json${p}`, {
+    headers: { Authorization: `PVEAPIToken=${cfg.PVE_TOKEN_ID}=${cfg.PVE_TOKEN_SECRET}` },
+    ...pveTls(),
+  });
+  if (res.status !== 200) {
+    const err = new Error(`Proxmox ${p}: HTTP ${res.status} ${(res.json?.message || res.text || "").toString().slice(0, 120)}`);
+    err.status = res.status;
+    throw err;
+  }
+  return res.json?.data;
+}
+
+// --- NetBird-API ----------------------------------------------------------------------
+async function netbird(p) {
+  const res = await request(`${NB_URL}${p}`, { headers: { Authorization: `Token ${cfg.NETBIRD_TOKEN}` } });
+  if (res.status !== 200) throw new Error(`NetBird ${p}: HTTP ${res.status} ${(res.json?.message || res.text || "").toString().slice(0, 120)}`);
+  return res.json;
+}
+
+// --- Zustand ---------------------------------------------------------------------------
+function loadState() {
+  try { return JSON.parse(fs.readFileSync(STATE_FILE, "utf8")); } catch { return { collections: {}, docs: {} }; }
+}
+function saveState(state) {
+  fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
+  const tmp = `${STATE_FILE}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
+  fs.renameSync(tmp, STATE_FILE);
+}
+
+// --- Wiki-Bausteine -----------------------------------------------------------------------
+const NOTES_RE = /^#{1,3}\s*Notizen\s*$/m;
+const NOTES_DEFAULT = "## Notizen\n\nHier ist Platz für eigene Notizen. Alles ab dieser Überschrift bleibt bei jedem Abgleich erhalten.\n";
+const hash = (s) => crypto.createHash("sha256").update(s).digest("hex").slice(0, 16);
+const esc = (s) => String(s ?? "").replace(/\|/g, "\\|").replace(/\n+/g, " ").trim();
+const now = () => new Date().toLocaleString("de-DE", { timeZone: process.env.TZ || "Europe/Berlin", dateStyle: "medium", timeStyle: "short" });
+
+async function ensureCollection(state, key, { name, description, color, icon }) {
+  const known = state.collections[key];
+  if (known) {
+    try {
+      const info = await outline("collections.info", { id: known });
+      if (info?.data && !info.data.archivedAt && !info.data.deletedAt) return known;
+    } catch (e) { if (e.status !== 404 && e.status !== 403 && e.status !== 400) throw e; }
+  }
+  // Gleichnamige Sammlung wiederverwenden
+  let offset = 0;
+  for (;;) {
+    const list = await outline("collections.list", { limit: 100, offset });
+    const hit = (list?.data || []).find((c) => c.name === name);
+    if (hit) { state.collections[key] = hit.id; return hit.id; }
+    if (!list?.data || list.data.length < 100) break;
+    offset += 100;
+  }
+  const created = await outline("collections.create", { name, description, color, icon, permission: "read_write" });
+  state.collections[key] = created.data.id;
+  say(`  + Sammlung „${name}“ angelegt`);
+  return created.data.id;
+}
+
+// Legt einen Eintrag an, falls er fehlt (für Verknüpfungen), und gibt { id, url } zurück
+async function ensureDoc(state, key, title, collectionId, { parentDocumentId, text } = {}) {
+  const known = state.docs[key];
+  if (known?.id) {
+    try {
+      const info = await outline("documents.info", { id: known.id });
+      const d = info?.data;
+      if (d && !d.deletedAt) {
+        if (d.archivedAt) { await outline("documents.restore", { id: d.id }); say(`  ↺ „${title}“ wiederhergestellt`); }
+        known.url = d.url;
+        return known;
+      }
+    } catch (e) { if (![400, 403, 404].includes(e.status)) throw e; }
+  }
+  const created = await outline("documents.create", { title, text: text || NOTES_DEFAULT, collectionId, publish: true, ...(parentDocumentId ? { parentDocumentId } : {}) });
+  state.docs[key] = { id: created.data.id, url: created.data.url, hash: null };
+  state.stats.created++;
+  say(`  + ${title}`);
+  return state.docs[key];
+}
+
+// Schreibt den automatischen Teil neu, behält alles ab „Notizen“
+async function writeDoc(state, key, title, autoText) {
+  const doc = state.docs[key];
+  const h = hash(title + "\n" + autoText);
+  doc.seen = true;
+  doc.title = title;
+  if (doc.hash === h) return;
+  const info = await outline("documents.info", { id: doc.id });
+  const current = info?.data?.text || "";
+  const m = current.match(NOTES_RE);
+  const notes = m ? current.slice(m.index) : NOTES_DEFAULT;
+  const text = `${autoText.trim()}\n\n> Automatisch aus Brainbox abgeglichen · Stand ${now()} · Änderungen oberhalb von „Notizen“ werden überschrieben.\n\n${notes.trim()}\n`;
+  await outline("documents.update", { id: doc.id, title, text, publish: true });
+  if (doc.hash) { state.stats.updated++; log(`  ~ ${title}`); }
+  doc.hash = h;
+}
+
+async function archiveMissing(state, prefix) {
+  for (const [key, doc] of Object.entries(state.docs)) {
+    if (!key.startsWith(prefix) || doc.seen) continue;
+    try { await outline("documents.archive", { id: doc.id }); say(`  − archiviert: ${doc.title || key}`); state.stats.archived++; } catch (e) {
+      if (![400, 403, 404].includes(e.status)) throw e;
+    }
+    delete state.docs[key];
+  }
+}
+
+// --- Hilfen ----------------------------------------------------------------------------------
+const gb = (bytes) => (bytes ? `${Math.round((bytes / 1024 ** 3) * 10) / 10} GB` : "–");
+const uptime = (s) => { if (!s) return "–"; const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600); return d ? `${d} T ${h} Std` : `${h} Std ${Math.floor((s % 3600) / 60)} Min`; };
+const norm = (s) => String(s || "").toLowerCase().trim();
+const isDomain = (a) => /[a-z]/i.test(a || "") && /\./.test(a || "") && !/\//.test(a || "");
+const link = (doc, label) => (doc?.url ? `[${esc(label)}](${doc.url})` : esc(label));
+const statusDe = (s) => ({ running: "🟢 läuft", stopped: "⚪ gestoppt", paused: "🟡 pausiert", suspended: "🟡 angehalten" }[s] || s || "–");
+
+async function pveGuests() {
+  const res = await pve("/cluster/resources?type=vm");
+  const guests = [];
+  for (const r of res || []) {
+    const g = {
+      vmid: r.vmid, name: r.name || `${r.type}-${r.vmid}`, node: r.node, type: r.type, status: r.status,
+      template: !!r.template, cpus: r.maxcpu, mem: r.maxmem, disk: r.maxdisk, uptime: r.uptime,
+      tags: (r.tags || "").split(/[;,]/).map((t) => t.trim()).filter(Boolean), ips: [], notes: "", os: "",
+    };
+    try {
+      const conf = await pve(`/nodes/${g.node}/${g.type}/${g.vmid}/config`);
+      g.notes = (conf?.description || "").trim();
+      g.os = conf?.ostype || "";
+      for (const [k, v] of Object.entries(conf || {})) {
+        if (/^net\d+$/.test(k)) { const ip = /ip=([0-9.]+)/.exec(String(v)); if (ip) g.ips.push(ip[1]); }
+      }
+    } catch { /* ohne Rechte oder Gast weg */ }
+    if (g.status === "running") {
+      try {
+        if (g.type === "lxc") {
+          const ifs = await pve(`/nodes/${g.node}/lxc/${g.vmid}/interfaces`);
+          for (const i of ifs || []) if (i.name !== "lo" && i.inet) g.ips.push(i.inet.split("/")[0]);
+        } else {
+          const ag = await pve(`/nodes/${g.node}/qemu/${g.vmid}/agent/network-get-interfaces`);
+          for (const i of ag?.result || []) {
+            if (i.name === "lo") continue;
+            for (const a of i["ip-addresses"] || []) if (a["ip-address-type"] === "ipv4" && !a["ip-address"].startsWith("127.")) g.ips.push(a["ip-address"]);
+          }
+        }
+      } catch { /* kein Gast-Agent oder keine Berechtigung */ }
+    }
+    g.ips = [...new Set(g.ips)];
+    // Zuordnung von Hand: in den Proxmox-Notizen „domain: x.example.de“
+    g.manualDomains = [...g.notes.matchAll(/^\s*domains?\s*[:=]\s*(.+)$/gim)].flatMap((m) => m[1].split(/[\s,]+/)).filter(isDomain);
+    guests.push(g);
+  }
+  guests.sort((a, b) => a.vmid - b.vmid);
+  return guests;
+}
+
+async function netbirdData() {
+  const peers = (await netbird("/api/peers")) || [];
+  const networks = (await netbird("/api/networks")) || [];
+  const domains = [];
+  for (const n of networks) {
+    let resources = [];
+    try { resources = (await netbird(`/api/networks/${n.id}/resources`)) || []; } catch { /* ältere NetBird-Version */ }
+    for (const r of resources) {
+      if (isDomain(r.address)) domains.push({ address: r.address, name: r.name, description: r.description, enabled: r.enabled !== false, network: n.name, groups: (r.groups || []).map((g) => g.name) });
+    }
+  }
+  return { peers, networks, domains };
+}
+
+// Was gehört zusammen? Gast ↔ NetBird-Gerät ↔ Domain
+function match(guests, nb) {
+  const peerOf = new Map();
+  for (const g of guests) {
+    const name = norm(g.name);
+    const p = nb.peers.find((p) => [p.hostname, p.name].map(norm).includes(name) || norm(p.dns_label).split(".")[0] === name ||
+      (p.network_addresses || []).some((a) => g.ips.includes(String(a.net_ip || "").split("/")[0])));
+    if (p) peerOf.set(g.vmid, p);
+  }
+  const domainsOf = new Map();
+  const add = (vmid, d) => { if (!domainsOf.has(vmid)) domainsOf.set(vmid, new Set()); domainsOf.get(vmid).add(d); };
+  for (const g of guests) for (const d of g.manualDomains) add(g.vmid, d.toLowerCase());
+  for (const d of nb.domains) {
+    const label = norm(d.address.replace(/^\*\./, "").split(".")[0]);
+    for (const g of guests) {
+      const n = norm(g.name);
+      if (n === label || n.endsWith(`-${label}`) || n.startsWith(`${label}-`)) add(g.vmid, d.address);
+    }
+  }
+  return { peerOf, domainsOf };
+}
+
+// --- Bereiche: Zuordnungsregeln aus dem Wiki --------------------------------------------------
+const RULES_DEFAULT = `Hier legst du fest, was in welchen **Bereich** gehört. Eine Zeile pro Regel, **die erste passende gewinnt** – also Genaues nach oben, Allgemeines nach unten. Änderungen gelten beim nächsten Abgleich (spätestens nach 5 Minuten).
+
+| Muster | Bereich |
+|---|---|
+| *.morninghosting.de | Minecraft-Server |
+| tag:minecraft | Minecraft-Server |
+| name:mc-* | Minecraft-Server |
+
+### So funktionieren Muster
+
+- \`*.morninghosting.de\` – alle Domains unter morninghosting.de (auch morninghosting.de selbst)
+- \`survival.morninghosting.de\` – genau diese eine Domain
+- \`name:mc-*\` – VMs, Container und NetBird-Geräte, deren Name mit „mc-“ beginnt
+- \`tag:minecraft\` – VMs und Container mit dem Proxmox-Tag „minecraft“
+- \`gruppe:Server\` – NetBird-Geräte in der Gruppe „Server“
+- \`*\` steht für beliebig viele Zeichen
+
+### Unterteilen
+
+Mit \`/\` legst du Unterbereiche an, z. B. \`Minecraft-Server/Survival\`. Jeder Bereich bekommt einen eigenen Eintrag in der Sammlung „Bereiche“, Unterbereiche hängen darunter.
+
+### Wer erbt was
+
+Eine VM gehört zum Bereich ihrer Domain, ein NetBird-Gerät zum Bereich seiner VM – außer eine eigene Regel passt vorher.
+`;
+
+const unmd = (s) => String(s || "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/\\(.)/g, "$1").replace(/[`*]{2}/g, "").replace(/`/g, "").trim();
+
+function parseRules(text) {
+  const rules = [];
+  for (const line of String(text || "").split("\n")) {
+    const m = line.match(/^\s*\|([^|]*)\|([^|]*)\|\s*$/);
+    if (!m) continue;
+    let pat = unmd(m[1]);
+    const area = unmd(m[2]).split("/").map((x) => x.trim()).filter(Boolean).join("/");
+    if (!pat || !area || /^[-:\s]+$/.test(pat) || /^muster$/i.test(pat)) continue;
+    let type = "domain";
+    const t = pat.match(/^(name|tag|gruppe|group)\s*:\s*(.+)$/i);
+    if (t) { type = t[1].toLowerCase() === "group" ? "gruppe" : t[1].toLowerCase(); pat = t[2].trim(); }
+    const re = new RegExp(`^${pat.split("*").map((x) => x.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`, "i");
+    rules.push({ type, pat, re, apex: type === "domain" && pat.startsWith("*.") ? pat.slice(2).toLowerCase() : null, area });
+  }
+  return rules;
+}
+
+function classify(rules, guests, nb, peerOf, domainsOf) {
+  // Treffer = { idx, area }: Position der Regel in der Liste – die weiter oben gewinnt, egal auf welchem Weg
+  const NONE = { idx: Infinity, area: null };
+  const hit = (type, values) => {
+    const vals = values.filter(Boolean).map(norm);
+    for (let i = 0; i < rules.length; i++) {
+      const r = rules[i];
+      if (r.type === type && vals.some((v) => r.re.test(v) || (r.apex && r.apex === v))) return { idx: i, area: r.area };
+    }
+    return NONE;
+  };
+  const best = (...hits) => hits.reduce((a, b) => (b.idx < a.idx ? b : a), NONE);
+  const domainVariants = (d) => { const bare = d.replace(/^\*\./, ""); return [d, bare, `x.${bare}`]; };
+  const domains = new Map(); // Domain → { source, vmids:Set }
+  for (const d of nb.domains) domains.set(d.address.toLowerCase(), { source: `NetBird · ${d.network}`, vmids: new Set() });
+  for (const [vmid, set] of domainsOf) for (const d of set) {
+    const k = d.toLowerCase();
+    if (!domains.has(k)) domains.set(k, { source: "Proxmox-Notizen", vmids: new Set() });
+    domains.get(k).vmids.add(vmid);
+  }
+  const domainHit = new Map();
+  for (const d of domains.keys()) domainHit.set(d, hit("domain", domainVariants(d)));
+  const guestHit = new Map();
+  for (const g of guests) {
+    const viaDomains = [...(domainsOf.get(g.vmid) || [])].map((d) => domainHit.get(d.toLowerCase()) || NONE);
+    guestHit.set(g.vmid, best(hit("name", [g.name]), hit("tag", g.tags), ...viaDomains));
+  }
+  const peerHit = new Map();
+  const guestOfPeerId = new Map([...peerOf.entries()].map(([vmid, p]) => [p.id, vmid]));
+  for (const p of nb.peers) {
+    const vmid = guestOfPeerId.get(p.id);
+    peerHit.set(p.id, best(hit("name", [p.name, p.hostname]), hit("gruppe", (p.groups || []).map((x) => x.name)),
+      vmid !== undefined ? guestHit.get(vmid) : NONE, hit("domain", [p.dns_label, ...(p.extra_dns_labels || [])])));
+  }
+  const areaOf = (m) => new Map([...m.entries()].map(([k, v]) => [k, v.area]));
+  // Alle Bereiche aus den Regeln, inklusive Oberbereichen
+  const areas = new Set();
+  for (const r of rules) { const parts = r.area.split("/"); for (let i = 1; i <= parts.length; i++) areas.add(parts.slice(0, i).join("/")); }
+  return {
+    domains, domainArea: areaOf(domainHit), guestArea: areaOf(guestHit), peerArea: areaOf(peerHit),
+    // Baumreihenfolge: Oberbereich, dann seine Unterbereiche (Eltern stehen immer vor Kindern)
+    areas: [...areas].sort((a, b) => { const x = a.split("/"), y = b.split("/"); for (let i = 0; i < Math.min(x.length, y.length); i++) { const c = x[i].localeCompare(y[i], "de"); if (c) return c; } return x.length - y.length; }),
+  };
+}
+
+// --- Abgleich ---------------------------------------------------------------------------------
+async function main() {
+  if (TEST === "pve" || TEST === "proxmox") {
+    const v = await pve("/version");
+    const guests = await pve("/cluster/resources?type=vm");
+    say(`ok Proxmox ${v?.version || "?"} · ${guests?.length ?? 0} VMs/Container sichtbar`);
+    return;
+  }
+  if (TEST === "netbird") {
+    const peers = await netbird("/api/peers");
+    say(`ok NetBird · ${peers?.length ?? 0} Geräte sichtbar`);
+    return;
+  }
+  if (TEST === "wiki") {
+    const me = await outline("auth.info", {});
+    say(`ok Wiki · angemeldet als ${me?.data?.user?.name}`);
+    return;
+  }
+
+  const usePve = !!(PVE_URL && cfg.PVE_TOKEN_ID && cfg.PVE_TOKEN_SECRET);
+  const useNb = !!(NB_URL && cfg.NETBIRD_TOKEN);
+  if (!cfg.OUTLINE_API_KEY) { log("Noch nicht eingerichtet: brainbox-connect proxmox bzw. brainbox-connect netbird"); return; }
+  if (!usePve && !useNb) { log("Weder Proxmox noch NetBird verbunden – nichts zu tun."); return; }
+
+  const state = loadState();
+  state.collections ||= {};
+  state.docs ||= {};
+  state.stats = { created: 0, updated: 0, archived: 0 };
+  for (const d of Object.values(state.docs)) d.seen = false;
+
+  const guests = usePve ? await pveGuests() : [];
+  const nb = useNb ? await netbirdData() : { peers: [], networks: [], domains: [] };
+  const { peerOf, domainsOf } = match(guests, nb);
+  const pveLink = (g) => `${PVE_URL}/#v1:0:=${g.type === "lxc" ? "lxc" : "qemu"}%2F${g.vmid}`;
+
+  // 1. Sammlungen und alle Einträge sicherstellen (damit Verknüpfungen stimmen)
+  let colPve, colNb;
+  if (usePve) {
+    colPve = await ensureCollection(state, "proxmox", { name: "Proxmox", description: "Alle VMs und Container – automatisch aus Proxmox. Eigene Notizen unter „Notizen“ bleiben erhalten.", color: "#E57000", icon: "server" });
+    await ensureDoc(state, "pve:overview", "Proxmox – Übersicht", colPve);
+    for (const g of guests) await ensureDoc(state, `pve:${g.vmid}`, `${g.name} (${g.vmid})`, colPve);
+  }
+  if (useNb) {
+    colNb = await ensureCollection(state, "netbird", { name: "NetBird", description: "Geräte, Netzwerke und Domains aus NetBird – automatisch abgeglichen.", color: "#F68330", icon: "globe" });
+    await ensureDoc(state, "nb:overview", "NetBird – Übersicht", colNb);
+    await ensureDoc(state, "nb:domains", "Domains", colNb);
+    for (const p of nb.peers) await ensureDoc(state, `nb:${p.id}`, p.name, colNb);
+  }
+  const guestOfPeer = new Map([...peerOf.entries()].map(([vmid, p]) => [p.id, guests.find((g) => g.vmid === vmid)]));
+
+  const colAreas = await ensureCollection(state, "areas", { name: "Bereiche", description: "Alles nach Bereichen sortiert – Regeln in „Zuordnungsregeln“, z. B. *.morninghosting.de → Minecraft-Server.", color: "#2F7A5B", icon: "shapes" });
+  const rulesDoc = await ensureDoc(state, "area:rules", "Zuordnungsregeln", colAreas, { text: RULES_DEFAULT });
+  rulesDoc.seen = true;
+  rulesDoc.title = "Zuordnungsregeln";
+  rulesDoc.hash = "regeln-gehoeren-dir";
+  const rulesText = (await outline("documents.info", { id: rulesDoc.id }))?.data?.text || "";
+  const rules = parseRules(rulesText);
+  const cls = classify(rules, guests, nb, peerOf, domainsOf);
+  await ensureDoc(state, "area:overview", "Bereiche – Übersicht", colAreas);
+  for (const a of cls.areas) {
+    const parent = a.includes("/") ? state.docs[`area:${a.slice(0, a.lastIndexOf("/"))}`]?.id : undefined;
+    await ensureDoc(state, `area:${a}`, a.split("/").pop(), colAreas, { parentDocumentId: parent });
+  }
+  const areaLink = (a) => (a ? link(state.docs[`area:${a}`], a.replace(/\//g, " › ")) : "–");
+
+  // 2. Inhalte schreiben
+  if (usePve) {
+    for (const g of guests) {
+      const p = peerOf.get(g.vmid);
+      const doms = [...(domainsOf.get(g.vmid) || [])];
+      const rows = [
+        ["ID", g.vmid], ["Typ", g.type === "lxc" ? "LXC-Container" : "VM"] , ["Node", g.node], ["Status", g.template ? "📄 Vorlage" : statusDe(g.status)],
+        ["CPU", g.cpus ? `${g.cpus} Kerne` : "–"], ["RAM", gb(g.mem)], ["Disk", gb(g.disk)], ["Betriebssystem", g.os || "–"],
+        ["IP-Adressen", g.ips.join(", ") || "–"], ["Tags", g.tags.join(", ") || "–"],
+        ["NetBird", p ? `${link(state.docs[`nb:${p.id}`], p.dns_label || p.name)} · ${p.ip} · ${p.connected ? "🟢 online" : "⚪ offline"}` : "–"],
+        ["Domains", doms.map((d) => `[${d}](https://${d.replace(/^\*\./, "")})`).join(", ") || "–"],
+        ["Bereich", areaLink(cls.guestArea.get(g.vmid))],
+        ["Proxmox", `[In Proxmox öffnen](${pveLink(g)})`],
+      ];
+      const table = ["| Eigenschaft | Wert |", "|---|---|", ...rows.map(([k, v]) => `| **${k}** | ${["Proxmox", "Domains", "NetBird", "Bereich"].includes(k) ? v : esc(v)} |`)].join("\n");
+      const notes = g.notes ? `\n\n### Beschreibung aus Proxmox\n\n${g.notes.replace(/\r/g, "").split(/\n+/).join("\n\n")}` : "";
+      await writeDoc(state, `pve:${g.vmid}`, `${g.name} (${g.vmid})`, `${table}${notes}`);
+    }
+    const header = "| ID | Name | Typ | Status | IP | NetBird | Domains | Bereich |\n|---|---|---|---|---|---|---|---|";
+    const lines = guests.map((g) => {
+      const p = peerOf.get(g.vmid);
+      return `| ${g.vmid} | ${link(state.docs[`pve:${g.vmid}`], g.name)} | ${g.type === "lxc" ? "LXC" : "VM"} · ${esc(g.node)} | ${g.template ? "📄 Vorlage" : statusDe(g.status)} | ${esc(g.ips[0] || "–")} | ${p ? (p.connected ? "🟢 " : "⚪ ") + esc(p.dns_label || p.name) : "–"} | ${esc([...(domainsOf.get(g.vmid) || [])].join(", ") || "–")} | ${areaLink(cls.guestArea.get(g.vmid))} |`;
+    });
+    const running = guests.filter((g) => g.status === "running").length;
+    await writeDoc(state, "pve:overview", "Proxmox – Übersicht",
+      `**${guests.length}** VMs und Container, davon **${running}** gerade an.\n\n${header}\n${lines.join("\n")}`);
+  }
+
+  if (useNb) {
+    for (const p of nb.peers) {
+      const g = guestOfPeer.get(p.id);
+      const rows = [
+        ["Name", p.name], ["Hostname", p.hostname], ["NetBird-IP", p.ip], ["DNS-Name", p.dns_label],
+        ["Weitere DNS-Namen", (p.extra_dns_labels || []).join(", ") || "–"], ["Status", p.connected ? "🟢 online" : "⚪ offline"],
+        ["Zuletzt gesehen", p.last_seen ? new Date(p.last_seen).toLocaleString("de-DE", { timeZone: process.env.TZ || "Europe/Berlin" }) : "–"],
+        ["Betriebssystem", p.os], ["NetBird-Version", p.version], ["Gruppen", (p.groups || []).map((x) => x.name).join(", ") || "–"],
+        ["Proxmox", g ? link(state.docs[`pve:${g.vmid}`], `${g.name} (${g.vmid})`) : "–"],
+        ["Bereich", areaLink(cls.peerArea.get(p.id))],
+      ];
+      const table = ["| Eigenschaft | Wert |", "|---|---|", ...rows.map(([k, v]) => `| **${k}** | ${["Proxmox", "Bereich"].includes(k) ? v : esc(v || "–")} |`)].join("\n");
+      await writeDoc(state, `nb:${p.id}`, p.name, table);
+    }
+    const online = nb.peers.filter((p) => p.connected).length;
+    const peerRows = nb.peers.map((p) => {
+      const g = guestOfPeer.get(p.id);
+      return `| ${link(state.docs[`nb:${p.id}`], p.name)} | ${esc(p.ip)} | ${esc(p.dns_label || "–")} | ${p.connected ? "🟢 online" : "⚪ offline"} | ${g ? link(state.docs[`pve:${g.vmid}`], `${g.name} (${g.vmid})`) : "–"} |`;
+    });
+    await writeDoc(state, "nb:overview", "NetBird – Übersicht",
+      `**${nb.peers.length}** Geräte, davon **${online}** online · **${nb.networks.length}** Netzwerke · **${nb.domains.length}** Domains ([Liste](${state.docs["nb:domains"].url}))\n\n| Gerät | NetBird-IP | DNS-Name | Status | Proxmox |\n|---|---|---|---|---|\n${peerRows.join("\n")}`);
+    const domRows = nb.domains.map((d) => {
+      const vmids = [...domainsOf.entries()].filter(([, set]) => set.has(d.address)).map(([v]) => guests.find((g) => g.vmid === v)).filter(Boolean);
+      return `| ${esc(d.address)} | ${esc(d.network)} | ${d.enabled ? "an" : "aus"} | ${vmids.map((g) => link(state.docs[`pve:${g.vmid}`], `${g.name} (${g.vmid})`)).join(", ") || "–"} | ${areaLink(cls.domainArea.get(d.address.toLowerCase()))} |`;
+    });
+    await writeDoc(state, "nb:domains", "Domains",
+      `Alle Domains aus den NetBird-Netzwerken und wozu sie gehören. Zuordnung automatisch über den Namen (z. B. **brainbox**.morncloud.de → Gast „brainbox“) oder von Hand mit einer Zeile \`domain: name.example.de\` in den Proxmox-Notizen des Gasts.\n\n| Domain | Netzwerk | Aktiv | Gehört zu | Bereich |\n|---|---|---|---|---|\n${domRows.join("\n") || "| – | – | – | – | – |"}`);
+  }
+
+  // Bereiche: je Bereich ein Eintrag mit Domains, VMs/Containern und Geräten
+  const inArea = (map, a) => [...map.entries()].filter(([, v]) => v === a).map(([k]) => k);
+  const guestRow = (g) => `| ${link(state.docs[`pve:${g.vmid}`], `${g.name} (${g.vmid})`)} | ${g.template ? "📄 Vorlage" : statusDe(g.status)} | ${esc(g.ips[0] || "–")} | ${esc([...(domainsOf.get(g.vmid) || [])].join(", ") || "–")} |`;
+  const peerRow = (p) => `| ${link(state.docs[`nb:${p.id}`], p.name)} | ${esc(p.ip)} | ${p.connected ? "🟢 online" : "⚪ offline"} |`;
+  const domainRow = (d) => {
+    const info = cls.domains.get(d);
+    const owners = [...(info?.vmids || [])].map((v) => guests.find((g) => g.vmid === v)).filter(Boolean);
+    return `| [${esc(d)}](https://${d.replace(/^\*\./, "")}) | ${esc(info?.source || "–")} | ${owners.map((g) => link(state.docs[`pve:${g.vmid}`], `${g.name} (${g.vmid})`)).join(", ") || "–"} |`;
+  };
+  const section = (title, head, rows) => (rows.length ? `\n\n### ${title}\n\n${head}\n${rows.join("\n")}` : "");
+  const summary = [];
+  for (const a of cls.areas) {
+    const ds = inArea(cls.domainArea, a).sort();
+    const gs = inArea(cls.guestArea, a).map((v) => guests.find((g) => g.vmid === v)).filter(Boolean);
+    const ps = inArea(cls.peerArea, a).map((id) => nb.peers.find((p) => p.id === id)).filter(Boolean);
+    const subs = cls.areas.filter((x) => x.startsWith(`${a}/`) && x.split("/").length === a.split("/").length + 1);
+    summary.push({ a, ds, gs, ps });
+    const head = `**${ds.length}** Domains · **${gs.length}** VMs und Container · **${ps.length}** NetBird-Geräte` +
+      (subs.length ? `\n\nUnterbereiche: ${subs.map((x) => areaLink(x)).join(" · ")}` : "") +
+      `\n\nZugeordnet über die [Zuordnungsregeln](${rulesDoc.url}).`;
+    const body = head +
+      section("Domains", "| Domain | Quelle | Gehört zu |\n|---|---|---|", ds.map(domainRow)) +
+      section("VMs und Container", "| Name | Status | IP | Domains |\n|---|---|---|---|", gs.map(guestRow)) +
+      section("NetBird-Geräte", "| Gerät | NetBird-IP | Status |\n|---|---|---|", ps.map(peerRow)) +
+      (!ds.length && !gs.length && !ps.length ? "\n\n_Noch nichts zugeordnet._" : "");
+    await writeDoc(state, `area:${a}`, a.split("/").pop(), body);
+  }
+  const loose = {
+    ds: [...cls.domainArea.entries()].filter(([, v]) => !v).map(([k]) => k).sort(),
+    gs: guests.filter((g) => !cls.guestArea.get(g.vmid)),
+    ps: nb.peers.filter((p) => !cls.peerArea.get(p.id)),
+  };
+  const overRows = summary.map(({ a, ds, gs, ps }) => `| ${"  ".repeat(a.split("/").length - 1)}${areaLink(a)} | ${ds.length} | ${gs.length} | ${ps.length} |`);
+  await writeDoc(state, "area:overview", "Bereiche – Übersicht",
+    `Alles nach Bereichen sortiert. Bereiche und Muster legst du in den [Zuordnungsregeln](${rulesDoc.url}) fest.\n\n| Bereich | Domains | VMs/Container | NetBird-Geräte |\n|---|---|---|---|\n${overRows.join("\n") || "| – | – | – | – |"}` +
+    `\n\n### Noch ohne Bereich\n\n${[
+      loose.ds.length ? `**Domains:** ${loose.ds.map(esc).join(", ")}` : "",
+      loose.gs.length ? `**VMs und Container:** ${loose.gs.map((g) => link(state.docs[`pve:${g.vmid}`], g.name)).join(", ")}` : "",
+      loose.ps.length ? `**NetBird-Geräte:** ${loose.ps.map((p) => link(state.docs[`nb:${p.id}`], p.name)).join(", ")}` : "",
+    ].filter(Boolean).join("\n\n") || "Alles ist einem Bereich zugeordnet. 🎉"}`);
+
+  // 3. Verschwundene Einträge archivieren (nicht löschen)
+  if (usePve) await archiveMissing(state, "pve:");
+  if (useNb) await archiveMissing(state, "nb:");
+  await archiveMissing(state, "area:");
+  for (const d of Object.values(state.docs)) delete d.seen;
+
+  const { created, updated, archived } = state.stats;
+  delete state.stats;
+  state.lastRun = new Date().toISOString();
+  saveState(state);
+  const parts = [];
+  if (usePve) parts.push(`Proxmox: ${guests.length} Gäste`);
+  if (useNb) parts.push(`NetBird: ${nb.peers.length} Geräte, ${nb.domains.length} Domains`);
+  parts.push(`Bereiche: ${cls.areas.length}`);
+  const changes = `${created} neu, ${updated} geändert, ${archived} archiviert`;
+  if (!QUIET || created || updated || archived) say(`Abgleich fertig · ${parts.join(" · ")} · ${changes}`);
+}
+
+main().catch((e) => { console.error(`Fehler: ${e.message}`); process.exit(1); });
