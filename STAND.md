@@ -4,6 +4,14 @@ _Zuletzt aktualisiert: 05.11.2026_
 
 ## Fertig
 
+- **Überarbeitung Schritt für Schritt** (Philips Wunsch: „genauso wie die Einstellungen mit Proxmox … alles von Outline überarbeiten“):
+  - **Schritt 1 fertig: Wiki- und Konto-Einstellungen** im Stil der Zentrale (gehört noch zu 1.1.0, weil 1.1.0 nicht auf `main` ist).
+    - Alle 14 Einstellungsseiten kommen jetzt aus `zentrale/app.html` (eingebettet per iframe). `Settings/Brainbox.tsx` hat die Liste `zentralePages` mit Gruppe und Recht (`admin`, `listUsers`, `readTemplate`, `createExport`, `all`).
+    - Neue Seiten: Allgemein, Mitglieder, Sicherheit, Vorlagen, Export, Profil, Darstellung, Benachrichtigungen. Sie sprechen die Wiki-API direkt an (gleiche Herkunft, Cookie plus `x-csrf-token`).
+    - Mitglieder sehen nur die Wiki- und Konto-Seiten; die Brainbox-Seiten zeigen ohne Admin die Sperre.
+    - Getestet im Testwiki: alle Seiten ohne Fehler, Einladen, Rolle ändern, Freigaben, Beispiel-Vorlagen, Export mit Download, Benachrichtigungen. Demo zeigt die neuen Seiten.
+  - **Nächste Schritte (Vorschlag):** Sammlungs-Seiten (Kopf mit Beschreibung und Kacheln), Suche, Dokument-Kopf und Teilen-Dialog, Archiv und Papierkorb, Passkeys-Seite.
+
 - **Brainbox 1.1.0 – aufgeräumt** (Philips Wunsch 04.11. abends: „nicht mehr erkennen, dass es Outline ist“, Einstellungen ausmisten, Anleitung im Wiki):
   - Ganze Dateien kommen jetzt aus `brand/overrides/`. Ersetzt wird nur, wenn ein Kennzeichen der erwarteten Fassung drinsteht.
     Neu angelegt werden `BrainboxDashboard`, `Settings/Brainbox.tsx`, `BrainboxVersion`, `BrainboxUpdateLink` und `utils/brainbox.ts`.

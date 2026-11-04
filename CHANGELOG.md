@@ -7,6 +7,7 @@ Brainbox hat eigene Versionen. Der Kern (Outline) ist je Version fest getestet u
 Aufgeräumt und neu sortiert: weniger Einstellungen, mehr Überblick.
 
 - **Einstellungen neu:** drei Gruppen – *Brainbox* (Übersicht, Proxmox-Server, NetBird, Claude, Anmeldung, Version & Update), *Wiki* (Allgemein, Mitglieder, Sicherheit, Vorlagen, Export) und *Konto*. Slack, Zapier, Webhooks, GitHub, Analytics, Gruppen, Emojis, API-Schlüssel und Integrationen sind weg.
+- **Wiki- und Konto-Einstellungen im Brainbox-Stil:** Allgemein, Mitglieder, Sicherheit, Vorlagen, Export, Profil, Darstellung und Benachrichtigungen sind neu gebaut – Karten mit Erklärung, Schalter mit einem Satz dazu, Einladen und Rollen auf einer Seite, Beispiel-Vorlagen auf Knopfdruck, Export mit Download
 - **Zentrale im Wiki:** die Brainbox-Zentrale steckt jetzt direkt in den Einstellungen, im Farbschema des Wikis. `/zentrale` führt dorthin.
 - **Startseite neu:** Begrüßung, dein Homelab auf einen Blick (Proxmox, NetBird, Bereiche, Version) und Schnellzugriffe
 - **Anleitung im Wiki:** neue Sammlung *Start* mit „Anleitung“ und „Spickzettel“, bei Updates aufgefrischt – eigene Änderungen bleiben

@@ -107,6 +107,10 @@ Oben in der Seitenleiste unter **Einstellungen**. Statt einer langen Liste gibt 
 | **Wiki** | Allgemein · Mitglieder · Sicherheit · Vorlagen · Export |
 | **Konto** | Profil · Darstellung · Benachrichtigungen · Passkeys |
 
+Alle Seiten sehen gleich aus: Karten mit kurzer Erklärung, Schalter mit einem Satz dazu, was sie bewirken, und Hinweise, wo es weitergeht. Unter *Mitglieder* lädst du Leute ein, änderst Rollen oder sperrst Zugänge. Die Konten von Brainbox selbst (Automatik, Claude) sind markiert. *Vorlagen* legt auf Wunsch drei Beispiele an (Server-Steckbrief, Anleitung, Störung), *Export* packt das ganze Wiki als Markdown, HTML oder JSON zum Herunterladen.
+
+<p align="center"><img src="docs/screenshots/einstellungen-mitglieder.png" alt="Einstellungen → Wiki → Mitglieder: Einladen-Formular und Liste der Mitglieder mit Rollen" width="900"></p>
+
 Slack, Zapier, Webhooks, GitHub, Analytics, Gruppen, Emojis, API-Schlüssel und Integrationen sind ausgeblendet – ein Homelab-Wiki braucht sie nicht. Alles aus der Gruppe *Brainbox* geht auch im Terminal des Containers: `brainbox-connect`, `brainbox-login`, `update`.
 
 ## 📖 Anleitung im Wiki
