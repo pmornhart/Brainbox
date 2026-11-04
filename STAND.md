@@ -22,6 +22,12 @@ _Zuletzt aktualisiert: 04.11.2026_
     Je Gast/Gerät ein Eintrag + Übersichten + „Domains“; Zuordnung Name/IP bzw. `domain: …` in Proxmox-Notizen;
     nur bei neuem Inhalt aktualisiert (Hash), alles ab „## Notizen“ bleibt; Verschwundenes wird archiviert.
   - Installer legt auf Wunsch `brainbox@pve` (PVEAuditor) + Token `wiki<CTID>` an, prüft TLS (Proxmox-CA, sonst öffentlich, sonst unsicher).
+- **Bereiche** (Philips Wunsch: „alle Domains unter .morninghosting.de → Minecraft-Server“): Sammlung „Bereiche“ mit Seite
+  „Zuordnungsregeln“ (Tabelle Muster | Bereich, gehört dem Nutzer, wird nie überschrieben). Muster: Domain mit `*`, `name:`, `tag:`,
+  `gruppe:`; erste passende Regel gewinnt (über alle Wege, auch geerbt); `A/B` = Unterbereich (verschachtelte Einträge).
+  Je Bereich ein Eintrag + „Bereiche – Übersicht“ inkl. „Noch ohne Bereich“. Outline schreibt `*` als `\*` – wird beim Lesen entfernt.
+  Domain ↔ Gast zusätzlich über `mc-survival` ↔ `survival.…` (Name endet/beginnt mit dem ersten Domain-Teil).
+- Live-Demo (klickbares Wiki aus exportierten Testdaten, Login-Seite, Einstellungen, Terminal): https://claude.ai/artifact/TzQ1ou6hZu56fowZwjvbSm
 - README neu (Titelbild Desktop+Handy, Funktionsübersicht, Schnellstart, 2 Mermaid-Diagramme, Screenshot-Galerie, FAQ),
   Screenshots in `docs/screenshots/`.
 - Getestet in Debian 13 (Docker, systemctl-Stub): Installation mit Outline v1.12.0, `update --check/--force`, Rollback,

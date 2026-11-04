@@ -34,6 +34,7 @@
 | 🤖 **Claude schreibt mit** | Claude bekommt ein eigenes Konto und verbindet sich über den eingebauten MCP-Anschluss, in der Claude-App wie in Claude Code. |
 | 🖥️ **Proxmox im Wiki** | Jede VM und jeder Container bekommt einen eigenen Eintrag. Neue erscheinen nach spätestens 5 Minuten, gelöschte werden archiviert. |
 | 🌐 **NetBird im Wiki** | Geräte, Netzwerke und Domains aus NetBird, automatisch mit den passenden VMs verknüpft. |
+| 🗂️ **Bereiche per Regel** | `*.morninghosting.de → Minecraft-Server`: Domains, VMs und Geräte landen automatisch im richtigen Bereich, mit Unterbereichen wie `Minecraft-Server/Survival`. Die Regeln sind eine normale Wiki-Seite. |
 | 📝 **Deine Notizen bleiben** | Alles unter der Überschrift „Notizen“ gehört dir. Der Abgleich ändert nur den Teil darüber. |
 | 🔒 **Nur mit Einladung** | Rein kommt nur, wen du einlädst. Proxmox wird nur gelesen. Schlüssel liegen geschützt im Container. |
 | 🔄 **Update mit Rückweg** | `update` sichert Datenbank und Einstellungen, baut die neue Version und spielt bei Fehlern die alte zurück. |
@@ -189,6 +190,35 @@ flowchart LR
 - **Gelöschte VM:** Eintrag wird archiviert, nicht gelöscht. Kommt sie zurück, wird er wiederhergestellt.
 - **Deine Notizen:** Alles ab der Überschrift „Notizen“ bleibt bei jedem Abgleich erhalten.
 - **Domain von Hand zuordnen:** in Proxmox in die Notizen des Gasts eine Zeile `domain: kino.morncloud.de` schreiben.
+
+## 🗂️ Bereiche: alles schön unterteilt
+
+In der Sammlung **Bereiche** liegt die Seite **Zuordnungsregeln**. Die bearbeitest du direkt im Wiki, eine Zeile pro Regel:
+
+| Muster | Bereich |
+|---|---|
+| `survival.morninghosting.de` | `Minecraft-Server/Survival` |
+| `*.morninghosting.de` | `Minecraft-Server` |
+| `tag:minecraft` | `Minecraft-Server` |
+| `*.morncloud.de` | `Homelab` |
+| `gruppe:Geräte` | `Geräte` |
+
+- **Muster:** Domains mit `*` als Platzhalter, `name:mc-*` für VM- und Gerätenamen, `tag:minecraft` für Proxmox-Tags, `gruppe:Server` für NetBird-Gruppen.
+- **Die erste passende Regel gewinnt.** Genaues nach oben, Allgemeines nach unten.
+- **Unterteilen** mit `/`: `Minecraft-Server/Survival` wird ein Unterbereich von Minecraft-Server.
+- **Erben:** Eine VM gehört zum Bereich ihrer Domain, ein NetBird-Gerät zum Bereich seiner VM, außer eine Regel weiter oben sagt etwas anderes.
+- Jeder Bereich bekommt einen eigenen Eintrag mit seinen Domains, VMs und Geräten. Die **Bereiche – Übersicht** zeigt alles auf einen Blick, auch was noch ohne Bereich ist.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/regeln.png" alt="Zuordnungsregeln im Wiki"></td>
+    <td width="50%"><img src="docs/screenshots/bereich-minecraft.png" alt="Bereich Minecraft-Server mit Domains, Containern und Unterbereichen"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Zuordnungsregeln, direkt im Wiki bearbeitbar</sub></td>
+    <td align="center"><sub>Bereich „Minecraft-Server“ mit Unterbereichen Survival und Kreativ</sub></td>
+  </tr>
+</table>
 
 ## 📚 Mehrere Wikis
 

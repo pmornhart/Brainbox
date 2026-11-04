@@ -148,6 +148,20 @@ Was im Wiki entsteht (Sammlung **NetBird**):
 
 **Zuordnung:** NetBird-Gerät ↔ Proxmox-Gast über gleichen Namen, Hostnamen oder gleiche IP. Domain ↔ Gast über den ersten Teil der Domain (`nextcloud.morncloud.de` → Gast `nextcloud`) oder von Hand mit einer Zeile `domain: cloud.morncloud.de` in den Proxmox-Notizen des Gasts.
 
+## Bereiche: Zuordnungsregeln
+
+Sobald Proxmox oder NetBird verbunden ist, legt der Abgleich die Sammlung **Bereiche** mit der Seite **Zuordnungsregeln** an. Die Tabelle darin bestimmt, was wohin gehört; Änderungen gelten beim nächsten Abgleich (spätestens nach 5 Minuten, sofort mit `brainbox-connect sync`).
+
+| Muster | trifft |
+|---|---|
+| `*.morninghosting.de` | alle Domains unter morninghosting.de, auch morninghosting.de selbst |
+| `survival.morninghosting.de` | genau diese Domain |
+| `name:mc-*` | VMs, Container und NetBird-Geräte, deren Name mit „mc-“ beginnt |
+| `tag:minecraft` | VMs und Container mit dem Proxmox-Tag „minecraft“ |
+| `gruppe:Server` | NetBird-Geräte in der Gruppe „Server“ |
+
+Die erste passende Regel gewinnt. `Minecraft-Server/Survival` legt einen Unterbereich an. Eine VM erbt den Bereich ihrer Domain, ein NetBird-Gerät den seiner VM. Jeder Bereich bekommt einen Eintrag mit Domains, VMs/Containern und Geräten; die **Bereiche – Übersicht** zeigt zusätzlich, was noch ohne Bereich ist. Die Seite „Zuordnungsregeln“ wird vom Abgleich nie überschrieben.
+
 ## Update
 
 Im Container (Konsole in Proxmox oder `pct enter <ID>`):
