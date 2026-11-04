@@ -253,14 +253,14 @@ msg_ok "Container läuft (IP ${IP})"
 # --- Installation im Container ----------------------------------------------------------
 TMP_DIR="$(mktemp -d)"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd || true)"
-if [[ -n "$SCRIPT_DIR" && -f "${SCRIPT_DIR}/brainbox.sh" && -f "${SCRIPT_DIR}/../install.sh" && -f "${SCRIPT_DIR}/../update.sh" ]]; then
-  cp "${SCRIPT_DIR}/../install.sh" "${SCRIPT_DIR}/../update.sh" "$TMP_DIR/"
-else
-  curl -fsSL "${RAW}/install.sh" -o "${TMP_DIR}/install.sh"
-  curl -fsSL "${RAW}/update.sh" -o "${TMP_DIR}/update.sh"
-fi
-pct push "$CTID" "${TMP_DIR}/install.sh" /root/brainbox-install.sh --perms 755
-pct push "$CTID" "${TMP_DIR}/update.sh" /root/brainbox-update.sh --perms 755
+for f in install.sh update.sh brainbox-login.sh; do
+  if [[ -n "$SCRIPT_DIR" && -f "${SCRIPT_DIR}/brainbox.sh" && -f "${SCRIPT_DIR}/../${f}" ]]; then
+    cp "${SCRIPT_DIR}/../${f}" "${TMP_DIR}/${f}"
+  else
+    curl -fsSL "${RAW}/${f}" -o "${TMP_DIR}/${f}"
+  fi
+  pct push "$CTID" "${TMP_DIR}/${f}" "/root/brainbox-${f#brainbox-}" --perms 755
+done
 
 echo -e "\n  ${BOLD}Installation im Container${CL}"
 pct exec "$CTID" -- env \
@@ -285,4 +285,4 @@ msg_ok "Fertig!"
 echo -e "${INFO}${GN}${APP} wurde erfolgreich eingerichtet.${CL}"
 echo -e "${INFO}${YW}Aufrufen unter:${CL} ${BGN}http://${IP}:${PORT}${CL}"
 echo -e "${INFO}${YW}Beim ersten Aufruf Workspace-Name und Admin-E-Mail eingeben – danach bist du als Admin angemeldet.${CL}"
-echo -e "${INFO}${YW}Konsole des Containers:${CL} pct enter ${CTID}"
+echo -e "${INFO}${YW}Danach E-Mail-Login, Passkeys, Google, Microsoft … einrichten:${CL} pct enter ${CTID}  →  brainbox-login"

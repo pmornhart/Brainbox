@@ -11,6 +11,8 @@ Outline-Wissensdatenbank als Proxmox-LXC, Nachbau des community-scripts Outline-
   Im Container aufgerufen startet es das Update.
 - `install.sh` – Installation im Container (Node 26 + corepack, PostgreSQL 16 aus PGDG, Redis, Outline-Release nach `/opt/brainbox`, Dienst `brainbox`).
 - `update.sh` – wird zu `/usr/bin/update`; aktualisiert sich selbst aus `main`, sichert DB und `.env`, Rollback bei Fehler.
+- `brainbox-login.sh` – wird zu `/usr/bin/brainbox-login`; Menü für Adresse, E-Mail, Passkeys, Google, Microsoft, Discord, OIDC, Sprache.
+  Nie `login` nennen (würde `/bin/login` verdecken).
 - `docs/proxmox-quickstart.md` – Quick-Start im Stil von community-scripts.org.
 
 ## Regeln

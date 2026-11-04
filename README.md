@@ -19,6 +19,8 @@ Die Wissensdatenbank [Outline](https://www.getoutline.com) mit einem Befehl als 
 - ⚙️ **Standard oder Erweitert**: Dialog für ID, Hostname, CPU, RAM, Disk, Netzwerk, VLAN, Passwort
 - 📚 **Outline** aus dem neuesten offiziellen Release, mit Node.js 26, PostgreSQL 16 und Redis
 - 🔐 **Erster Start ohne Fremd-Login**: Workspace und Admin direkt im Browser anlegen
+- 🔑 **Sechs Anmeldewege**: E-Mail-Link, Passkey, Google, Microsoft, Discord, OIDC (z. B. Pocket ID), alles per Menü mit `brainbox-login`
+- 🇩🇪 **Oberfläche auf Deutsch**
 - 🔄 **`update`-Befehl** im Container: sichert vorher Datenbank und Einstellungen, spielt bei Fehlern die alte Version zurück
 - 🧩 Läuft unprivilegiert, startet mit Proxmox, Notizen mit Link in der Proxmox-Oberfläche
 
@@ -38,10 +40,28 @@ Danach im Browser `http://<IP>:3000` öffnen, Workspace-Name, Name und E-Mail ei
 
 Alle Details, Pfade und Optionen: **[Proxmox Quick-Start](docs/proxmox-quickstart.md)**.
 
+## Anmeldung einrichten
+
+<p align="center"><img src="docs/login.png" alt="Login-Seite mit Microsoft, Discord, Pocket ID, Google, Passkey und E-Mail" width="560"></p>
+
+Im Container `brainbox-login` eingeben. Ein Menü richtet Adresse (Domain/HTTPS), E-Mail-Versand, Passkeys, Google, Microsoft, Discord, OIDC und Sprache ein und startet Brainbox danach neu.
+
+| Weg | Wer | Braucht |
+|---|---|---|
+| E-Mail-Link / Code | alle Eingeladenen | Postfach zum Versenden (SMTP), z. B. Gmail mit App-Passwort |
+| Passkey | wer in den Einstellungen einen angelegt hat | HTTPS mit Domain |
+| Google | Google-Konten (private @gmail.com nur zum Beitreten) | HTTPS mit Domain, OAuth-Client in der Google Cloud Console |
+| Microsoft | Firmen- und Schulkonten (Microsoft 365 / Entra ID) | HTTPS mit Domain, App-Registrierung in Microsoft Entra |
+| Discord | Discord-Konten, optional nur Mitglieder eines Servers | HTTPS mit Domain, App im Discord Developer Portal |
+| OIDC | Konten im eigenen Login-Dienst (Pocket ID, Authentik, Keycloak …) | den Login-Dienst |
+
+Erst den Arbeitsbereich im Browser anlegen, dann die Anbieter eintragen. Sonst verschwindet die Einrichtungsseite.
+
 ## Bedienung
 
 | Was | Wo |
 |---|---|
+| Anmeldung einrichten | `brainbox-login` (Übersicht: `brainbox-login status`) |
 | Einstellungen | `/opt/brainbox/.env` (danach `systemctl restart brainbox`) |
 | Logs | `journalctl -u brainbox -f` |
 | Datenbank-Zugang | `/root/brainbox.creds` |

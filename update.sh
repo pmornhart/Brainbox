@@ -150,6 +150,16 @@ self_update() {
   rm -f "$tmp"
 }
 
+# brainbox-login ebenfalls aktuell halten
+update_login_cmd() {
+  local tmp
+  tmp="$(mktemp)"
+  if curl -fsSL "${RAW}/brainbox-login.sh" -o "$tmp" 2>/dev/null && bash -n "$tmp" 2>/dev/null && [[ -s "$tmp" ]]; then
+    cmp -s "$tmp" /usr/bin/brainbox-login || install -m 755 "$tmp" /usr/bin/brainbox-login
+  fi
+  rm -f "$tmp"
+}
+
 # --- Ablauf -----------------------------------------------------------------------
 [[ $EUID -eq 0 ]] || { msg_error "Bitte als root ausführen."; exit 1; }
 if [[ ! -d "$APP_DIR" ]]; then
@@ -159,6 +169,7 @@ fi
 : >"$LOG"
 
 self_update "$@"
+update_login_cmd
 
 CURRENT="$(cat "$VERSION_FILE" 2>/dev/null || echo "unbekannt")"
 if [[ -z "$OUTLINE_VERSION" ]]; then

@@ -189,6 +189,7 @@ sed -i "s#^REDIS_URL=.*#REDIS_URL=redis://localhost:6379#" .env
 sed -i "s#^URL=.*#URL=http://${IP}:${PORT}#" .env
 sed -i "s#^PORT=.*#PORT=${PORT}#" .env
 sed -i "s#^FORCE_HTTPS=.*#FORCE_HTTPS=false#" .env
+sed -i "s#^DEFAULT_LANGUAGE=.*#DEFAULT_LANGUAGE=de_DE#" .env
 # Slack-Platzhalter aus der Beispielkonfiguration entfernen (sonst zeigt die
 # Login-Seite einen Slack-Knopf, der nicht funktioniert)
 sed -i -E "s#^(SLACK_CLIENT_ID|SLACK_CLIENT_SECRET|SLACK_VERIFICATION_TOKEN|SLACK_APP_ID)=.*#\1=#" .env
@@ -225,15 +226,22 @@ $STD systemctl daemon-reload
 $STD systemctl enable --now "$SERVICE"
 msg_ok "Dienst angelegt"
 
-msg_info "Update-Befehl wird eingerichtet"
-if [[ -f /root/brainbox-update.sh ]]; then
-  install -m 755 /root/brainbox-update.sh /usr/bin/update
-  rm -f /root/brainbox-update.sh
-else
-  curl -fsSL "${RAW}/update.sh" -o /usr/bin/update
-  chmod 755 /usr/bin/update
-fi
-msg_ok "Update-Befehl eingerichtet (im Container: update)"
+msg_info "Befehle update und brainbox-login werden eingerichtet"
+apt_install whiptail
+# Vom Proxmox-Host mitgeschickt (/root/brainbox-*.sh), sonst aus dem Repo laden
+install_cmd() { # install_cmd <Datei im Repo> <Ziel>
+  local pushed="/root/brainbox-${1#brainbox-}"
+  if [[ -f "$pushed" ]]; then
+    install -m 755 "$pushed" "$2"
+    rm -f "$pushed"
+  else
+    curl -fsSL "${RAW}/$1" -o "$2"
+    chmod 755 "$2"
+  fi
+}
+install_cmd update.sh /usr/bin/update
+install_cmd brainbox-login.sh /usr/bin/brainbox-login
+msg_ok "Befehle eingerichtet (im Container: update, brainbox-login)"
 
 msg_info "Container wird angepasst"
 cat <<'EOF' >/etc/profile.d/00_brainbox-motd.sh
@@ -242,7 +250,7 @@ echo ""
 echo -e "  \033[1;92mBrainbox\033[m · Outline-Wissensdatenbank"
 echo -e "  🌐  Weboberfläche: \033[36mhttp://${_bb_ip}:3000\033[m"
 echo -e "  🖥️  $(hostname) · $(. /etc/os-release && echo "$PRETTY_NAME")"
-echo -e "  📦  Outline $(cat /root/.brainbox 2>/dev/null || echo '?') · Update: \033[33mupdate\033[m"
+echo -e "  📦  Outline $(cat /root/.brainbox 2>/dev/null || echo '?') · Update: \033[33mupdate\033[m · Anmeldung: \033[33mbrainbox-login\033[m"
 echo ""
 unset _bb_ip
 EOF
@@ -271,3 +279,4 @@ msg_ok "${APP} ist installiert!"
 echo -e "${INFO}${YW}Weboberfläche:${CL} ${BL}http://${IP}:${PORT}${CL}"
 echo -e "${INFO}${YW}Beim ersten Start migriert Outline die Datenbank – die Seite kann 1–2 Minuten brauchen.${CL}"
 echo -e "${INFO}${YW}Beim ersten Aufruf Workspace-Name und Admin-E-Mail eingeben – danach bist du als Admin angemeldet.${CL}"
+echo -e "${INFO}${YW}Danach E-Mail-Login, Passkeys, Google, Microsoft … einrichten mit:${CL} brainbox-login"
