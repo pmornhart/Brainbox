@@ -250,23 +250,25 @@ function summary(me) {
 const LOGIN_KEYS = new Set(["URL", "DEFAULT_LANGUAGE", "SMTP_HOST", "SMTP_PORT", "SMTP_SECURE", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM_EMAIL", "SMTP_SERVICE",
   "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_TENANT_ID", "DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET", "DISCORD_SERVER_ID",
   "OIDC_DISPLAY_NAME", "OIDC_ISSUER_URL", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET"]);
-const NAME_RE = /^[a-z0-9][a-z0-9-]{0,30}$/;
+// Servernamen: Kleinbuchstaben, Ziffern, Bindestrich und Punkt (z. B. „zuhause“ oder „ph.morn.lan“), kein „..“, nicht mit Punkt am Ende
+const NAME_RE = /^(?!.*\.\.)[a-z0-9][a-z0-9.-]{0,62}(?<!\.)$/;
+const NAME_HINT = "Name: Kleinbuchstaben, Ziffern, Punkt und Bindestrich, z. B. zuhause oder ph.morn.lan";
 const ONE_LINE = (v) => typeof v === "string" && !/[\r\n\0]/.test(v) && v.length < 2000;
 
 const actions = {
   "proxmox/add": async (b) => {
-    if (!NAME_RE.test(b.name || "")) return { ok: false, output: "Name: nur Kleinbuchstaben, Ziffern und Bindestrich, z. B. zuhause" };
+    if (!NAME_RE.test(b.name || "")) return { ok: false, output: NAME_HINT };
     if (![b.url, b.tokenId, b.secret].every(ONE_LINE) || !b.url || !b.tokenId || !b.secret) return { ok: false, output: "Adresse, Token-ID und Secret ausfüllen." };
     return run("brainbox-connect", ["proxmox", "add", b.name, b.url, b.tokenId, b.secret, ...(b.insecure ? ["--insecure"] : [])]);
   },
   "proxmox/remove": async (b) => (NAME_RE.test(b.name || "") ? run("brainbox-connect", ["proxmox", "remove", b.name]) : { ok: false, output: "Unbekannter Server." }),
   "proxmox/agent": async (b) => {
-    if (!NAME_RE.test(b.name || "")) return { ok: false, output: "Name: nur Kleinbuchstaben, Ziffern und Bindestrich, z. B. standort-2" };
+    if (!NAME_RE.test(b.name || "")) return { ok: false, output: NAME_HINT };
     const r = await run("brainbox-connect", ["proxmox", "agent", b.name, "--raw"], { timeout: 60000 });
     try { return { ok: r.ok, data: JSON.parse(r.output.trim().split("\n").pop()) }; } catch { return { ok: false, output: r.output || "Befehl konnte nicht erzeugt werden." }; }
   },
   "proxmox/rename": async (b) => {
-    if (!NAME_RE.test(b.name || "") || !NAME_RE.test(b.newName || "")) return { ok: false, output: "Name: nur Kleinbuchstaben, Ziffern und Bindestrich, z. B. zuhause" };
+    if (!NAME_RE.test(b.name || "") || !NAME_RE.test(b.newName || "")) return { ok: false, output: NAME_HINT };
     return run("brainbox-connect", ["proxmox", "rename", b.name, b.newName], { timeout: 300000 });
   },
   "proxmox/test": async (b) => run("brainbox-connect", ["proxmox", "test", ...(NAME_RE.test(b.name || "") ? [b.name] : [])], { timeout: 60000 }),

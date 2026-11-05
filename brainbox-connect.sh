@@ -307,7 +307,7 @@ pve_migrate() { # früher gab es nur einen Server in connect.env – in die List
 pve_add() { # pve_add NAME URL TOKEN-ID SECRET [--insecure]
   local name="${1:-}" url="${2:-}" tid="${3:-}" sec="${4:-}" insecure="false" ca="" before
   [[ "${5:-}" == "--insecure" ]] && insecure="true"
-  name="$(echo "$name" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-')"
+  name="$(pve_clean_name "$name")"
   [[ -n "$name" && -n "$url" && -n "$tid" && -n "$sec" ]] || fail "Beispiel: brainbox-connect proxmox add zuhause https://192.168.1.2:8006 'brainbox@pve!wiki' <secret>"
   [[ "$url" =~ ^https?:// ]] || url="https://${url}"
   [[ "$url" =~ :[0-9]+/?$ ]] || url="${url%/}:8006"
@@ -337,7 +337,8 @@ pve_remove() { # pve_remove NAME
   if [[ -n "$(conf_get OUTLINE_API_KEY)" ]]; then run_sync || true; fi
 }
 
-pve_clean_name() { echo "${1:-}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-' | head -c 31; }
+# Servernamen: Kleinbuchstaben, Ziffern, Bindestrich und Punkt (z. B. zuhause, ph.morn.lan); kein "..", vorne/hinten kein Punkt
+pve_clean_name() { echo "${1:-}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9.-' | sed -E 's/\.\.+/./g; s/^[.-]+//' | head -c 63 | sed -E 's/\.+$//'; }
 pve_has() { [[ "$(pve_json | jq --arg n "$1" 'map(select(.name == $n)) | length')" != "0" ]]; }
 
 pve_agent() { # pve_agent NAME [--raw] – Server an anderem Standort: meldet sich selbst über den Brainbox-Agenten
@@ -428,7 +429,7 @@ pve_menu() {
       case "$what" in
       pruefen) clear; (run_sync --test pve "$choice") || true; read -rp "  Weiter mit Enter … " _ ;;
       umbenennen)
-        name="$(wt --title "SERVER ${choice}" --inputbox "Neuer Name (Kleinbuchstaben, Ziffern, Bindestrich)" 9 66 "$choice")" || continue
+        name="$(wt --title "SERVER ${choice}" --inputbox "Neuer Name (Kleinbuchstaben, Ziffern, Punkt, Bindestrich – z. B. ph.morn.lan)" 9 66 "$choice")" || continue
         clear; (pve_rename "$choice" "$name") || true; read -rp "  Weiter mit Enter … " _ ;;
       befehl) clear; (pve_agent "$choice") || true; read -rp "  Weiter mit Enter … " _ ;;
       entfernen)
