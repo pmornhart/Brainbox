@@ -2,6 +2,10 @@
 
 Brainbox hat eigene Versionen. Der Kern (Outline) ist je Version fest getestet und steht dabei.
 
+## 1.4.3 – 05.11.2026 · Kern: Outline v1.12.0
+
+- **Servernamen frei wählbar:** Proxmox-Server dürfen jetzt jeden Namen tragen – mit Punkten, Leerzeichen, Großbuchstaben, Umlauten und Sonderzeichen, z. B. `ph.morn.lan` oder `Büro: Köln (alt)`. Nur leer oder mehrzeilig geht nicht. Gilt beim Hinzufügen, für Server an anderen Standorten, beim Umbenennen und für Claude
+
 ## 1.4.2 – 05.11.2026 · Kern: Outline v1.12.0
 
 - **Servernamen mit Punkt:** Proxmox-Server dürfen jetzt auch Namen wie `ph.morn.lan` tragen – beim Hinzufügen, für Server an anderen Standorten und beim Umbenennen (Zentrale, Terminal und Claude)

@@ -13,14 +13,14 @@ const ZENTRALE_URL =
 const KEY_FILE = "/etc/brainbox/intern.key";
 /** Länger als der längste Befehl (Proxmox prüfen und abgleichen) */
 const REQUEST_TIMEOUT_MS = 300_000;
-const NAME_MAX_LENGTH = 63;
+const NAME_MAX_LENGTH = 100;
 /**
- * Name eines Proxmox-Servers: Kleinbuchstaben, Ziffern, Bindestrich und Punkt;
- * vorne kein Bindestrich oder Punkt, hinten kein Punkt, kein „..“.
- * Passt: "standort-2", "ph.morn.lan" · passt nicht: "-zuhause", "Zuhause", "a..b", "pve."
- * Ausprobieren: https://regex101.com/?regex=%5E(%3F!.*%5C.%5C.)%5Ba-z0-9%5D%5Ba-z0-9.-%5D*(%3F%3C!%5C.)%24&testString=ph.morn.lan
+ * Name eines Proxmox-Servers: frei wählbar (Punkte, Leerzeichen, Großbuchstaben, Umlaute …),
+ * nur ohne Steuerzeichen wie Zeilenumbrüche.
+ * Passt: "ph.morn.lan", "Zuhause Keller" · passt nicht: "zeile\nzwei"
+ * Ausprobieren: https://regex101.com/?regex=%5E%5B%5E%5Cx00-%5Cx1f%5Cx7f%5D%2B%24&testString=ph.morn.lan
  */
-const NAME_PATTERN = /^(?!.*\.\.)[a-z0-9][a-z0-9.-]*(?<!\.)$/;
+const NAME_PATTERN = /^[^\x00-\x1f\x7f]+$/;
 
 /** Wie Brainbox aufgebaut ist und wie Claude es bedient – kommt zu den Anweisungen des MCP-Servers */
 export const brainboxInstructions = `Brainbox ist ein Wiki fürs Homelab. Du arbeitest mit der Anmeldung der Person, die dich verbunden hat, und mit ihren Rechten. Schreibe auf Deutsch, klar und knapp.
@@ -77,7 +77,7 @@ const serverName = () =>
     .max(NAME_MAX_LENGTH)
     .regex(NAME_PATTERN)
     .describe(
-      "Kurzer Name des Proxmox-Servers: Kleinbuchstaben, Ziffern, Punkt und Bindestrich, z. B. zuhause oder ph.morn.lan"
+      "Name des Proxmox-Servers, frei wählbar, z. B. zuhause, ph.morn.lan oder Zuhause Keller"
     );
 
 type ToolDef = {

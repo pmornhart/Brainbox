@@ -131,10 +131,12 @@ function pveTls(srv) {
 // Server an anderen Standorten: Daten aus ihrer letzten Meldung statt aus der API
 const AGENT_DIR = process.env.BRAINBOX_AGENT_DIR || "/var/lib/brainbox/agent";
 const AGENT_MAX_AGE_MIN = 15;
+// Servernamen sind frei wählbar – der Dateiname ist kodiert wie jq @uri (gleich in Zentrale und brainbox-connect)
+const agentFileName = (name) => `${encodeURIComponent(name).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)}.json`;
 const MS_PER_MIN = 60000;
 function agentSnapshot(srv) {
   if (srv.snap === undefined) {
-    try { srv.snap = JSON.parse(fs.readFileSync(path.join(AGENT_DIR, `${srv.name}.json`), "utf8")); } catch { srv.snap = null; }
+    try { srv.snap = JSON.parse(fs.readFileSync(path.join(AGENT_DIR, agentFileName(srv.name)), "utf8")); } catch { srv.snap = null; }
     if (srv.snap?.url) srv.url = srv.snap.url;
   }
   return srv.snap;
@@ -313,7 +315,7 @@ const gb = (bytes) => (bytes ? `${Math.round((bytes / 1024 ** 3) * 10) / 10} GB`
 const uptime = (s) => { if (!s) return "–"; const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600); return d ? `${d} T ${h} Std` : `${h} Std ${Math.floor((s % 3600) / 60)} Min`; };
 const norm = (s) => String(s || "").toLowerCase().trim();
 const isDomain = (a) => /[a-z]/i.test(a || "") && /\./.test(a || "") && !/\//.test(a || "");
-const link = (doc, label) => (doc?.url ? `[${esc(label)}](${doc.url})` : esc(label));
+const link = (doc, label) => (doc?.url ? `[${esc(label).replace(/[[\]]/g, "\\$&")}](${doc.url})` : esc(label));
 const statusDe = (s) => ({ running: "🟢 läuft", stopped: "⚪ gestoppt", paused: "🟡 pausiert", suspended: "🟡 angehalten" }[s] || s || "–");
 
 async function pveGuests(srv) {
@@ -604,7 +606,7 @@ async function main() {
     } catch (e) {
       info.error = e.message;
       say(`  ! ${e.message}`);
-      for (const [k, d] of Object.entries(state.docs)) if (k.startsWith(`pve:${srv.name}:`) || k === `pvesrv:${srv.name}`) d.seen = true;
+      for (const [k, d] of Object.entries(state.docs)) if (k === `pvesrv:${srv.name}` || (k.startsWith(`pve:${srv.name}:`) && /^\d+$/.test(k.slice(`pve:${srv.name}:`.length)))) d.seen = true;
     }
     servers.push(info);
   }
