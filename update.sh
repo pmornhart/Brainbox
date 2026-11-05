@@ -155,6 +155,27 @@ self_update() {
   rm -f "$tmp"
 }
 
+# --- Von der Webseite gestartet? Dann als eigener Dienst weiterlaufen -----------------
+# Die Zentrale startet „update“ als ihren Unterprozess. Startet das Update am Ende die Zentrale neu,
+# beendet systemd alle ihre Prozesse – auch dieses Update, kurz bevor es die neue Version einträgt.
+# Deshalb zieht es hier in eine eigene systemd-Einheit um; die Ausgabe landet im selben Protokoll.
+detach_from_zentrale() {
+  [[ -z "${BRAINBOX_DETACHED:-}" ]] || return 0
+  grep -q "brainbox-zentrale.service" /proc/self/cgroup 2>/dev/null || return 0
+  command -v systemd-run >/dev/null 2>&1 && [[ -d /run/systemd/system ]] || return 0
+  local out var envs=()
+  out="$(readlink -f "/proc/$$/fd/1" 2>/dev/null || true)"
+  [[ -f "$out" ]] || out="/var/log/brainbox-update-zentrale.log"
+  while IFS= read -r var; do envs+=("--setenv=${var}=${!var}"); done < <(compgen -e | grep '^BRAINBOX_' || true)
+  if systemd-run --quiet --collect --unit "brainbox-update-$(date +%s)" \
+    -p "StandardOutput=append:${out}" -p "StandardError=append:${out}" \
+    --setenv=BRAINBOX_DETACHED=1 --setenv=BRAINBOX_SELF_UPDATED=1 --setenv=TERM=dumb "${envs[@]}" \
+    /usr/bin/update "$@"; then
+    echo "Update läuft als eigener Dienst weiter."
+    exit 0
+  fi
+}
+
 # --- Brainbox-Bausatz und Versionen ---------------------------------------------------
 fetch_kit() { # fetch_kit <Zielordner>
   local dst="$1" tmp
@@ -193,6 +214,7 @@ fi
 : >"$LOG"
 
 self_update "$@"
+[[ "$CHECK_ONLY" == "yes" ]] || detach_from_zentrale "$@"
 
 msg_info "Neueste Brainbox-Version wird geholt"
 fetch_kit "$NEW_KIT" || { msg_error "Brainbox-Bausatz nicht ladbar (GitHub erreichbar?)"; rm -rf "$NEW_KIT"; exit 1; }

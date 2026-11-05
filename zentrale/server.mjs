@@ -280,6 +280,14 @@ const actions = {
   "update/check": async () => { const u = await checkUpdate(); return { ok: !u.error, available: u.available, update: u, output: updateText(u) }; },
   "update/start": async () => {
     fs.writeFileSync(UPDATE_LOG, `Update gestartet ${new Date().toLocaleString("de-DE")}\n`);
+    // Als eigene systemd-Einheit starten: Das Update startet am Ende die Zentrale neu, und systemd
+    // beendet dabei alle Prozesse der Zentrale – ein Unterprozess würde mitten drin abbrechen.
+    if (fs.existsSync("/run/systemd/system")) {
+      const r = await run("systemd-run", ["--quiet", "--collect", "--unit", `brainbox-update-${Date.now()}`,
+        "-p", `StandardOutput=append:${UPDATE_LOG}`, "-p", `StandardError=append:${UPDATE_LOG}`,
+        "--setenv=BRAINBOX_DETACHED=1", "--setenv=TERM=dumb", "/usr/bin/update"], { timeout: 20000 });
+      if (r.ok) return { ok: true, output: "Update läuft – das dauert 10 bis 20 Minuten. Das Wiki ist dabei kurz nicht erreichbar." };
+    }
     const out = fs.openSync(UPDATE_LOG, "a");
     spawn("update", [], { detached: true, stdio: ["ignore", out, out], env: { ...process.env, TERM: "dumb" } }).unref();
     return { ok: true, output: "Update läuft – das dauert 10 bis 20 Minuten. Das Wiki ist dabei kurz nicht erreichbar." };
@@ -292,6 +300,7 @@ const STATIC = {
   "/zentrale": [path.join(HERE, "app.html"), "text/html; charset=utf-8"],
   "/zentrale/": [path.join(HERE, "app.html"), "text/html; charset=utf-8"],
   "/zentrale/logo.svg": [path.join(KIT, "brand/logo.svg"), "image/svg+xml"],
+  "/zentrale/icon-32.png": [path.join(KIT, "brand/icons/app-32.png"), "image/png"],
   "/zentrale/fonts/Geist.woff2": [path.join(KIT, "brand/fonts/Geist.woff2"), "font/woff2"],
   "/zentrale/fonts/GeistMono.woff2": [path.join(KIT, "brand/fonts/GeistMono.woff2"), "font/woff2"],
 };
@@ -336,7 +345,7 @@ async function zentrale(req, res) {
 }
 
 // --- Weiterleitung an den Outline-Kern --------------------------------------------------------------------
-const STARTING = `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="5"><title>Brainbox startet</title>
+const STARTING = `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="5"><title>Brainbox startet</title><link rel="icon" href="/zentrale/icon-32.png" type="image/png" sizes="32x32">
 <body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#0D1210;color:#E2EBE5;font:16px system-ui,sans-serif">
 <div style="text-align:center"><img src="/zentrale/logo.svg" width="64" height="64" alt=""><h1 style="font-weight:600">Brainbox startet gerade</h1>
 <p style="color:#8FA89A">Nach einem Update oder Neustart dauert das ein bis zwei Minuten. Die Seite lädt sich von selbst neu.</p></div></body>`;
@@ -357,6 +366,10 @@ function proxy(req, res) {
   });
   up.on("error", () => {
     if (res.headersSent) return res.destroy();
+    // Symbol im Browser-Tab auch dann, wenn der Kern gerade nicht läuft
+    if (/^\/(favicon\.ico|images\/favicon-\d+\.png)$/.test(req.url.split("?")[0])) {
+      try { return send(res, 200, fs.readFileSync(path.join(KIT, "brand/icons/app-32.png")), "image/png"); } catch { /* weiter unten */ }
+    }
     const wantsHtml = String(req.headers.accept || "").includes("text/html");
     send(res, 503, wantsHtml ? STARTING : { error: "Brainbox startet gerade" }, wantsHtml ? "text/html; charset=utf-8" : undefined);
   });
