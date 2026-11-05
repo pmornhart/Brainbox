@@ -140,11 +140,13 @@ override("app/components/BrainboxDashboard.tsx");
 override("app/components/Sidebar/components/BrainboxUpdateLink.tsx");
 override("app/components/Sidebar/components/BrainboxVersion.tsx");
 override("app/scenes/Settings/Brainbox.tsx");
-// ersetzt: Einstellungen, Startseite, Anmeldeseite
+// ersetzt: Einstellungen, Startseite, Anmeldeseite, Menü unter dem Namen
 override("app/hooks/useSettingsConfig.ts", "const useSettingsConfig = () => {");
 override("app/components/Sidebar/Settings.tsx", "function SettingsSidebar()");
 override("app/scenes/Home.tsx", "function Home()");
 override("app/scenes/Login/components/Background.tsx", "export const Background = styled(Fade)");
+// Menü unter dem eigenen Namen: Konto-Einstellungen oben
+override("app/menus/AccountMenu.tsx", "const AccountMenu: React.FC<Props>");
 
 // --- Seitenleiste: Einstellungen und Update-Symbol oben, Konsole-Optik ------------------------------------
 patch("app/components/Sidebar/App.tsx", [
@@ -190,31 +192,6 @@ patch("app/actions/definitions/navigation.tsx", [
     'name: () => "Anleitung",\n  analyticsName: "Open documentation",\n  section: NavigationSection,\n  iconInContextMenu: false,\n  icon: <OpenIcon />,\n  url: UrlHelper.guide,\n  target: "_self",'],
   ["Neuigkeiten", 'name: ({ t }) => t("Changelog"),', 'name: () => "Neuigkeiten",'],
   ["Problem melden", 'name: ({ t }) => t("Report a bug"),', 'name: () => "Problem melden",'],
-]);
-patch("app/menus/AccountMenu.tsx", [
-  ["Menüeinträge", `      openKeyboardShortcuts,
-      openDocumentation,
-      openAPIDocumentation,
-      ActionSeparator,
-      openChangelog,
-      openFeedbackUrl,
-      openBugReportUrl,
-      changeTheme,
-      navigateToProfileSettings,
-      navigateToAccountPreferences,
-      ActionSeparator,
-      logout,`, `      openDocumentation,
-      openKeyboardShortcuts,
-      ActionSeparator,
-      navigateToSettings,
-      navigateToProfileSettings,
-      changeTheme,
-      ActionSeparator,
-      openChangelog,
-      openBugReportUrl,
-      ActionSeparator,
-      logout,`],
-  ["Import Einstellungen", "  navigateToProfileSettings,\n  navigateToAccountPreferences,", "  navigateToProfileSettings,\n  navigateToAccountPreferences,\n  navigateToSettings,"],
 ]);
 // Überschriften passend zu den Namen in den Einstellungen
 patch("app/scenes/Settings/Users.tsx", [

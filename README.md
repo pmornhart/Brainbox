@@ -105,7 +105,7 @@ Oben in der Seitenleiste unter **Einstellungen**. Statt einer langen Liste gibt 
 |---|---|
 | **Brainbox** (nur Admins) | Übersicht · Proxmox-Server · NetBird · Claude · Anmeldung · Version & Update |
 | **Wiki** | Allgemein · Mitglieder · Sicherheit · Vorlagen · Export |
-| **Konto** | Profil · Darstellung · Benachrichtigungen · Passkeys |
+| **Konto** | Profil · Darstellung · Benachrichtigungen · Passkeys – auch mit einem Klick auf deinen Namen unten links |
 
 Alle Seiten sehen gleich aus: Karten mit kurzer Erklärung, Schalter mit einem Satz dazu, was sie bewirken, und Hinweise, wo es weitergeht. Unter *Mitglieder* lädst du Leute ein, änderst Rollen oder sperrst Zugänge. Die Konten von Brainbox selbst (Automatik, Claude) sind markiert. *Vorlagen* legt auf Wunsch drei Beispiele an (Server-Steckbrief, Anleitung, Störung), *Export* packt das ganze Wiki als Markdown, HTML oder JSON zum Herunterladen.
 

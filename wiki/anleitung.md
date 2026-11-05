@@ -2,7 +2,7 @@ Brainbox ist dein Wiki fürs Homelab. Hier steht in fünf Minuten, wie du dich z
 
 ## So ist Brainbox aufgebaut
 
-Links ist die **Seitenleiste**. Oben stehen Startseite, Suche, Entwürfe und **Einstellungen**, darunter deine **Sammlungen**. Eine Sammlung ist ein großer Ordner, in dem Seiten und Unterseiten liegen.
+Links ist die **Seitenleiste**. Oben stehen Startseite, Suche, Entwürfe und **Einstellungen**, darunter deine **Sammlungen**. Eine Sammlung ist ein großer Ordner, in dem Seiten und Unterseiten liegen. Ganz unten steht **dein Name**: Ein Klick darauf öffnet dein Konto (Profil, Darstellung, Benachrichtigungen, Passkeys), dazu Farbschema, Anleitung und Abmelden.
 
 | Sammlung | Was drin ist |
 |---|---|

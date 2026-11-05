@@ -10,6 +10,11 @@ _Zuletzt aktualisiert: 05.11.2026_
     - Neue Seiten: Allgemein, Mitglieder, Sicherheit, Vorlagen, Export, Profil, Darstellung, Benachrichtigungen. Sie sprechen die Wiki-API direkt an (gleiche Herkunft, Cookie plus `x-csrf-token`).
     - Mitglieder sehen nur die Wiki- und Konto-Seiten; die Brainbox-Seiten zeigen ohne Admin die Sperre.
     - Getestet im Testwiki: alle Seiten ohne Fehler, Einladen, Rolle ändern, Freigaben, Beispiel-Vorlagen, Export mit Download, Benachrichtigungen. Demo zeigt die neuen Seiten.
+  - **Konto unter dem Namen** (Philips Wunsch 05.11.: „die Kontoeinstellungen soll man sehen, wenn man auf seinen Namen unten geht“):
+    - `brand/overrides/app/menus/AccountMenu.tsx` ersetzt das Menü unten links: Gruppe „Konto“ (Profil, Darstellung, Benachrichtigungen, Passkeys mit Symbol), dann Farbschema, Einstellungen (nur Admins), Anleitung, Tastaturkürzel, Neuigkeiten, Problem melden, Abmelden.
+    - Die Konto-Gruppe bleibt zusätzlich in der Einstellungs-Liste, damit man dort sieht, wo man ist.
+    - Demo: Klick auf den Namen öffnet dasselbe Menü (Desktop und Handy geprüft). Anleitung und Spickzettel erwähnen es.
+    - Getestet im Testwiki: Menü zeigt die Gruppe „Konto“, Klick auf „Benachrichtigungen“ öffnet `/settings/notifications`, keine Seitenfehler.
   - **Nächste Schritte (Vorschlag):** Sammlungs-Seiten (Kopf mit Beschreibung und Kacheln), Suche, Dokument-Kopf und Teilen-Dialog, Archiv und Papierkorb, Passkeys-Seite.
 
 - **Brainbox 1.1.0 – aufgeräumt** (Philips Wunsch 04.11. abends: „nicht mehr erkennen, dass es Outline ist“, Einstellungen ausmisten, Anleitung im Wiki):

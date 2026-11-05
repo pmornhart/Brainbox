@@ -87,7 +87,7 @@ Alle Einstellungen gibt es im Browser: oben in der Seitenleiste unter **Einstell
 | | Anmeldung | E-Mail, Google, Microsoft, Discord, OIDC – mit Redirect-URIs zum Kopieren |
 | | Version & Update | installierte und neueste Version, Update starten, Protokoll |
 | **Wiki** | Allgemein, Mitglieder, Sicherheit, Vorlagen, Export | Name und Bild, Leute einladen, „Einladungen erforderlich“, Vorlagen, Sicherung aller Seiten |
-| **Konto** | Profil, Darstellung, Benachrichtigungen, Passkeys | dein Name, hell oder dunkel, E-Mails, Passkeys |
+| **Konto** | Profil, Darstellung, Benachrichtigungen, Passkeys | dein Name, hell oder dunkel, E-Mails, Passkeys – auch über deinen Namen unten links |
 
 Jede Seite der Gruppe *Brainbox* erklärt Schritt für Schritt, was zu tun ist. Im Terminal geht dasselbe mit `brainbox-connect`, `brainbox-login` und `update`.
 

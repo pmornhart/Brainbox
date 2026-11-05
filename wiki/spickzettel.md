@@ -42,6 +42,7 @@ Auf dem Mac statt `Strg` die Taste `⌘`.
 | einen Proxmox-Server verbinden | [Einstellungen → Brainbox → Proxmox-Server](/settings/brainbox-proxmox) |
 | NetBird verbinden | [Einstellungen → Brainbox → NetBird](/settings/brainbox-netbird) |
 | Claude mitschreiben lassen | [Einstellungen → Brainbox → Claude](/settings/brainbox-claude) |
+| meinen Namen, mein Bild, hell/dunkel, E-Mails ändern | Klick auf **deinen Namen unten links** → Konto |
 | jemanden einladen | [Einstellungen → Wiki → Mitglieder](/settings/users) |
 | Anmeldung per E-Mail, Google … | [Einstellungen → Brainbox → Anmeldung](/settings/brainbox-anmeldung) |
 | aktualisieren | [Einstellungen → Brainbox → Version & Update](/settings/brainbox-update) |
