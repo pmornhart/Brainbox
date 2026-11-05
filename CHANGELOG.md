@@ -2,6 +2,16 @@
 
 Brainbox hat eigene Versionen. Der Kern (Outline) ist je Version fest getestet und steht dabei.
 
+## 1.4.0 – 05.11.2026 · Kern: Outline v1.12.0
+
+Eigene Symbole – von Outline ist nichts mehr zu sehen.
+
+- **Neuer Symbolsatz:** Alle Symbole im Wiki – Seitenleiste, Menüs, Knöpfe, Editor und die Symbole für Sammlungen – kommen jetzt aus Brainbox: feine Linien im Stil der Zentrale (Formen aus Phosphor Icons, MIT). Das alte Outline-Paket wird nicht mehr angezeigt
+- **App-Symbole mit neuem Namen:** Browser und Handys merken sich Symbole lange. Unter neuem Dateinamen holen sie jetzt sicher das Brainbox-Symbol – im Tab, auf dem Startbildschirm (Android und iPhone) und bei Claude
+- **Handy-Symbol in einer Farbe:** Bei Android mit farbig angepassten Symbolen erscheint jetzt das Brainbox-Logo statt des alten Outline-Zeichens
+- **E-Mails** zeigen oben das Brainbox-Logo
+- `/favicon.ico` liefert immer das Brainbox-Symbol (vorher kam dort die Wiki-Seite)
+
 ## 1.3.0 – 05.11.2026 · Kern: Outline v1.12.0
 
 Proxmox an jedem Standort, Claude packt mit an.

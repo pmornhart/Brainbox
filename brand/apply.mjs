@@ -121,6 +121,18 @@ patch("server/routes/app.ts", [["Such-Titel", 'href="/opensearch.xml"\n      tit
 patch("vite.config.mts", [["App-Manifest", 'name: "Outline",\n          short_name: "Outline",\n          theme_color: "#fff",\n          background_color: "#fff",',
   `name: "Brainbox",\n          short_name: "Brainbox",\n          theme_color: "${C.bg}",\n          background_color: "${C.bg}",`]]);
 
+// --- App-Symbole unter eigenen Namen: Browser und Handys merken sich Symbole lange – mit neuem Namen holen sie das Brainbox-Symbol
+patch("vite.config.mts", [["Manifest-Symbole", '"/images/icon-', '"/images/brainbox-', true]]);
+patch("server/routes/app.ts", [
+  ["Tab-Symbol", '/images/favicon-32.png`', '/images/brainbox-favicon-32.png`'],
+  ["Apple-Symbole", '/images/icon-maskable-', '/images/brainbox-maskable-', true],
+]);
+patch("server/mcp/index.ts", [["MCP-Symbole", '/images/icon-', '/images/brainbox-', true]]);
+
+// --- Symbole in der Oberfläche: eigener Satz statt „outline-icons“ (brand/symbole) ----------------------------------
+patch("vite.config.mts", [["Symbolsatz", '"@shared": path.resolve(import.meta.dirname, "./shared"),\n      },',
+  '"@shared": path.resolve(import.meta.dirname, "./shared"),\n        // Brainbox-Symbole statt outline-icons\n        "outline-icons": path.resolve(import.meta.dirname, "./app/components/Icons/BrainboxIconSet.tsx"),\n      },']]);
+
 // --- Logo ---------------------------------------------------------------------------------------
 const mark = fs.readFileSync(path.join(KIT, "brand/mark-path.txt"), "utf8").trim();
 patch("app/components/Icons/OutlineIcon.tsx", [
@@ -156,6 +168,7 @@ override("app/scenes/Login/components/Background.tsx", "export const Background 
 override("app/menus/AccountMenu.tsx", "const AccountMenu: React.FC<Props>");
 // neu: Brainbox-Werkzeuge für Claude im MCP-Server
 override("server/mcp/tools/brainbox.ts");
+override("app/components/Icons/BrainboxIconSet.tsx");
 
 // --- Seitenleiste: Einstellungen und Update-Symbol oben, Konsole-Optik ------------------------------------
 patch("app/components/Sidebar/App.tsx", [
@@ -249,7 +262,14 @@ for (const [src, dst] of [
   ["app-16.png", "favicon-16.png"], ["app-32.png", "favicon-32.png"], ["app-192.png", "icon-192.png"],
   ["app-512.png", "icon-512.png"], ["app-1024.png", "Icon-1024.png"],
   ["app-192.png", "icon-maskable-192.png"], ["app-512.png", "icon-maskable-512.png"], ["app-1024.png", "icon-maskable-1024.png"],
+  ["app-mono-512.png", "icon-monochrome-512.png"], ["app-mono-1024.png", "icon-monochrome-1024.png"],
+  // dieselben Bilder unter eigenen Namen (siehe „App-Symbole unter eigenen Namen“)
+  ["app-16.png", "brainbox-favicon-16.png"], ["app-32.png", "brainbox-favicon-32.png"],
+  ["app-192.png", "brainbox-192.png"], ["app-512.png", "brainbox-512.png"],
+  ["app-192.png", "brainbox-maskable-192.png"], ["app-512.png", "brainbox-maskable-512.png"], ["app-1024.png", "brainbox-maskable-1024.png"],
+  ["app-mono-512.png", "brainbox-monochrome-512.png"], ["app-mono-1024.png", "brainbox-monochrome-1024.png"],
 ]) copy(`brand/icons/${src}`, `public/images/${dst}`);
+copy("brand/icons/mail-logo.png", "public/email/header-logo.png");
 
 fs.writeFileSync(path.join(CORE, ".brainbox-branded"), `${new Date().toISOString()}\n`);
 say(`Brainbox-Branding: ${ok} Änderungen angewendet${miss ? `, ${miss} nicht gefunden` : ""}`);

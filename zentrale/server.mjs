@@ -458,7 +458,7 @@ function proxy(req, res) {
   up.on("error", () => {
     if (res.headersSent) return res.destroy();
     // Symbol im Browser-Tab auch dann, wenn der Kern gerade nicht läuft
-    if (/^\/(favicon\.ico|images\/favicon-\d+\.png)$/.test(req.url.split("?")[0])) {
+    if (/^\/(favicon\.ico|images\/(brainbox-)?favicon-\d+\.png)$/.test(req.url.split("?")[0])) {
       try { return send(res, 200, fs.readFileSync(path.join(KIT, "brand/icons/app-32.png")), "image/png"); } catch { /* weiter unten */ }
     }
     const wantsHtml = String(req.headers.accept || "").includes("text/html");
@@ -468,6 +468,10 @@ function proxy(req, res) {
 }
 
 const server = http.createServer((req, res) => {
+  // /favicon.ico gibt es im Kern nicht (dort käme die Wiki-Seite) – Browser bekommen hier immer das Brainbox-Symbol
+  if (req.url.split("?")[0] === "/favicon.ico" && (req.method === "GET" || req.method === "HEAD")) {
+    try { return send(res, 200, fs.readFileSync(path.join(KIT, "brand/icons/app-32.png")), "image/png"); } catch { /* weiter zum Kern */ }
+  }
   if (req.url === "/zentrale" || req.url.startsWith("/zentrale/") || req.url.startsWith("/zentrale?")) {
     zentrale(req, res).catch((e) => send(res, 500, { error: String(e.message || e) }));
     return;

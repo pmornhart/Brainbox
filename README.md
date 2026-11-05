@@ -31,7 +31,7 @@ Brainbox ist ein eigenständiges Wiki für dein Homelab: Editor mit Echtzeit-Bea
 
 | | |
 |---|---|
-| 🎨 **Eigenes Gesicht** | Brainbox-Logo, eigener Name, Schrift Geist und das Farbschema „Homelab-Konsole“ – dunkel als Standard, hell auf Wunsch. |
+| 🎨 **Eigenes Gesicht** | Brainbox-Logo, eigener Name, eigene Symbole, Schrift Geist und das Farbschema „Homelab-Konsole“ – dunkel als Standard, hell auf Wunsch. |
 | 🏠 **Startseite** | Begrüßung und dein Homelab auf einen Blick: laufende VMs je Server, NetBird-Geräte online, Bereiche, Version – mit Schnellzugriffen. |
 | ⚙️ **Aufgeräumte Einstellungen** | Drei Gruppen statt zwanzig Punkten: *Brainbox* (Proxmox-Server, NetBird, Künstliche Intelligenz, Anmeldung, Update), *Wiki* und *Konto*. Jede Seite erklärt Schritt für Schritt, was zu tun ist. |
 | 📖 **Anleitung im Wiki** | Sammlung „Start“ mit Anleitung und Spickzettel – liegt nach der Installation bereit und wird bei Updates aufgefrischt. |
@@ -342,7 +342,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/pmornhart/Brainbox/main/
 
 ## 🙏 Herkunft
 
-Angefangen als Nachbau von [`ct/outline.sh`](https://github.com/community-scripts/ProxmoxVE/blob/main/ct/outline.sh) aus den [Proxmox VE Helper-Scripts](https://community-scripts.org/scripts/outline) (MIT, Autor: tremor021). Wiki-Kern: [outline/outline](https://github.com/outline/outline) (BSL 1.1). Schrift: [Geist](https://github.com/vercel/geist-font) (SIL OFL 1.1).
+Angefangen als Nachbau von [`ct/outline.sh`](https://github.com/community-scripts/ProxmoxVE/blob/main/ct/outline.sh) aus den [Proxmox VE Helper-Scripts](https://community-scripts.org/scripts/outline) (MIT, Autor: tremor021). Wiki-Kern: [outline/outline](https://github.com/outline/outline) (BSL 1.1). Schrift: [Geist](https://github.com/vercel/geist-font) (SIL OFL 1.1). Symbole: [Phosphor Icons](https://phosphoricons.com) (MIT, Zuordnung in `brand/symbole/`).
 
 ---
 
