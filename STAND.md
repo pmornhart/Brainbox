@@ -108,7 +108,11 @@ _Zuletzt aktualisiert: 05.11.2026_
 ## Offen / nächste Schritte
 
 - Erledigt 05.11.2026: Brainbox 1.1.0 nach `main` übernommen (Philip: „bring mal das update raus“). Installationen zeigen innerhalb von 6 Std. „Update verfügbar · 1.1.0“, sofort mit `update` im Container.
-- Philip fragte 05.11.: „Wieso bin ich kein Admin?“ – laut Wiki ist sein Konto Admin (Rolle `admin`). Wartet auf Screenshot, wo es anders aussieht.
+- Behoben 05.11.: Philip sah „Nur für Admins“, obwohl sein Konto Admin ist (per MCP geprüft).
+  - Ursache: Die Zentrale verglich bei Aktionen die Herkunft (`Origin`) nur mit der `Host`-Kopfzeile. Schreibt der Reverse-Proxy `Host` auf die interne IP um, kam 403, und die Seite zeigte jede 403 als „Nur für Admins“.
+  - Lösung: `ownHosts()` nimmt auch den Host aus `URL=` der `.env` (Standard-Ports gleich). `app.html` zeigt „Nur für Admins“ nur bei `error: "admin"`, sonst die echte Meldung. Kaputt kodierte fremde Cookies werfen nicht mehr.
+  - Nachgestellt im Testcontainer mit umgeschriebenem Host: vorher 403, nachher 200; fremde Herkunft weiter 403.
+  - Für Philip: einmal `update` im Container (der Knopf in 1.0.0 hat denselben Fehler), danach geht alles im Browser.
 - Der Tag `v1.0.0` ließ sich aus der Cloud nicht pushen (403). Philip kann ihn bei Bedarf auf GitHub als Release anlegen.
 - Erledigt 04.11.2026: Brainbox 1.0.0 nach `main` übernommen, Tag `v1.0.0`. Ab jetzt zeigen Installationen „Update verfügbar“, sobald `brainbox.version` auf `main` hochgezählt wird.
 - Für ein Update an Philips Installationen: Änderung auf `main`, `BRAINBOX_VERSION` erhöhen, `CHANGELOG.md` ergänzen, Tag setzen.

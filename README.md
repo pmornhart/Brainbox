@@ -296,6 +296,11 @@ Der Wiki-Kern ist [Outline](https://github.com/outline/outline). Brainbox baut i
 Domain bei der Installation leer lassen, dann läuft Brainbox im Heimnetz unter `http://IP:3000`. Passkeys, Google, Microsoft und die Claude-App brauchen später eine Domain mit HTTPS.
 </details>
 
+<details><summary>Die Einstellungen sagen „Nur für Admins“, obwohl ich Admin bin.</summary>
+
+Das passierte bis 1.0.0 hinter manchen Reverse-Proxys, die die Adresse beim Weiterleiten auf die interne IP umschreiben. Ab 1.1.0 erkennt Brainbox sich auch an der Wiki-Adresse. Einmal im Container `update` ausführen (oder vom Proxmox-Host `pct exec <ID> -- update`), danach geht es auch über den Knopf in den Einstellungen. Steht danach etwas anderes da, nennt die Meldung jetzt den genauen Grund.
+</details>
+
 <details><summary>Geht es ohne Proxmox?</summary>
 
 Ja, auf einem frischen Debian 13 als root. Dort fehlt meist `curl`, also zuerst:

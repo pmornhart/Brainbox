@@ -220,7 +220,12 @@ html.embed, html.embed body { height: auto; background: transparent; }
       { method: "POST", headers: { "Content-Type": "application/json", "X-Brainbox": "1" }, body: JSON.stringify(body) };
     const r = await fetch(`/zentrale/api/${name}`, { credentials: "same-origin", ...opt });
     if (r.status === 401) throw Object.assign(new Error("login"), { gate: "login" });
-    if (r.status === 403) throw Object.assign(new Error("admin"), { gate: "admin" });
+    if (r.status === 403) {
+      // „Nur für Admins“ nur, wenn es wirklich an der Rolle liegt – sonst die echte Meldung zeigen
+      const j = await r.json().catch(() => ({}));
+      if (j.error === "admin") throw Object.assign(new Error("admin"), { gate: "admin" });
+      throw new Error(j.message || "Abgelehnt.");
+    }
     return r.json();
   }
   let tt;

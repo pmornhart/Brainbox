@@ -57,8 +57,22 @@ const send = (res, code, body, type = "application/json; charset=utf-8") => {
   res.end(data);
 };
 const cookies = (req) => Object.fromEntries(String(req.headers.cookie || "").split(/;\s*/).filter(Boolean).map((c) => {
-  const i = c.indexOf("="); return [c.slice(0, i), decodeURIComponent(c.slice(i + 1))];
+  const i = c.indexOf("="); const raw = c.slice(i + 1);
+  let value = raw;
+  try { value = decodeURIComponent(raw); } catch { /* fremdes Cookie (z. B. anderer Dienst der Domain) mit eigener Kodierung */ }
+  return [c.slice(0, i), value];
 }));
+
+// Eigene Adresse(n) der Brainbox: die Host-Kopfzeile und die Wiki-Adresse aus der .env.
+// Viele Reverse-Proxys schreiben Host auf die interne IP um – dann zählt die Wiki-Adresse.
+// Standard-Ports zählen nicht mit (brainbox.example.org:443 = brainbox.example.org).
+const hostKey = (h) => String(h || "").trim().toLowerCase().replace(/:(80|443)$/, "");
+function ownHosts(req) {
+  const hosts = new Set([hostKey(req.headers.host)]);
+  try { hosts.add(hostKey(new URL(readEnv(ENV_FILE).URL).host)); } catch { /* keine Adresse eingetragen */ }
+  hosts.delete("");
+  return [...hosts];
+}
 
 function run(cmd, args, { timeout = 240000, input } = {}) {
   return new Promise((resolve) => {
@@ -303,8 +317,16 @@ async function zentrale(req, res) {
   if (req.method !== "POST" || !actions[name]) return send(res, 404, { error: "Nicht gefunden" });
 
   // Schutz gegen fremde Seiten: eigener Kopfzeilen-Eintrag und gleiche Herkunft
+  if (req.headers["x-brainbox"] !== "1") return send(res, 403, { error: "Herkunft", message: "Abgelehnt: Die Anfrage kam nicht von der Brainbox-Seite." });
   const origin = req.headers.origin;
-  if (req.headers["x-brainbox"] !== "1" || (origin && new URL(origin).host !== req.headers.host)) return send(res, 403, { error: "Herkunft" });
+  if (origin) {
+    let from = "";
+    try { from = hostKey(new URL(origin).host); } catch { /* unlesbar */ }
+    const own = ownHosts(req);
+    if (!own.includes(from)) {
+      return send(res, 403, { error: "Herkunft", message: `Abgelehnt: Die Seite läuft unter ${from || origin}, die Brainbox kennt sich als ${own.join(" bzw. ") || "?"}. Wiki-Adresse mit „brainbox-login“ prüfen.` });
+    }
+  }
   const chunks = [];
   for await (const c of req) { chunks.push(c); if (chunks.reduce((n, x) => n + x.length, 0) > 64 * 1024) return send(res, 413, { error: "zu groß" }); }
   let body = {};

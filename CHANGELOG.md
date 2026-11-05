@@ -9,6 +9,7 @@ Aufgeräumt und neu sortiert: weniger Einstellungen, mehr Überblick.
 - **Einstellungen neu:** drei Gruppen – *Brainbox* (Übersicht, Proxmox-Server, NetBird, Claude, Anmeldung, Version & Update), *Wiki* (Allgemein, Mitglieder, Sicherheit, Vorlagen, Export) und *Konto*. Slack, Zapier, Webhooks, GitHub, Analytics, Gruppen, Emojis, API-Schlüssel und Integrationen sind weg.
 - **Wiki- und Konto-Einstellungen im Brainbox-Stil:** Allgemein, Mitglieder, Sicherheit, Vorlagen, Export, Profil, Darstellung und Benachrichtigungen sind neu gebaut – Karten mit Erklärung, Schalter mit einem Satz dazu, Einladen und Rollen auf einer Seite, Beispiel-Vorlagen auf Knopfdruck, Export mit Download
 - **Konto unter deinem Namen:** Ein Klick auf deinen Namen unten links zeigt Profil, Darstellung, Benachrichtigungen und Passkeys, dazu Farbschema, Einstellungen, Anleitung und Abmelden
+- **Behoben: „Nur für Admins“ hinter Reverse-Proxy.** Schreibt der Proxy die Adresse auf die interne IP um, lehnte die Zentrale jede Aktion ab und meldete fälschlich „Nur für Admins“. Jetzt zählt auch die Wiki-Adresse, und eine Ablehnung nennt den echten Grund
 - **Zentrale im Wiki:** die Brainbox-Zentrale steckt jetzt direkt in den Einstellungen, im Farbschema des Wikis. `/zentrale` führt dorthin.
 - **Startseite neu:** Begrüßung, dein Homelab auf einen Blick (Proxmox, NetBird, Bereiche, Version) und Schnellzugriffe
 - **Anleitung im Wiki:** neue Sammlung *Start* mit „Anleitung“ und „Spickzettel“, bei Updates aufgefrischt – eigene Änderungen bleiben
