@@ -23,6 +23,10 @@ install -m 755 "${KIT_DIR}/brainbox-login.sh" /usr/bin/brainbox-login
 install -m 755 "${KIT_DIR}/brainbox-connect.sh" /usr/bin/brainbox-connect
 mkdir -p /opt/brainbox-connect /etc/brainbox /var/lib/brainbox-connect /var/lib/brainbox
 chmod 700 /etc/brainbox
+# Schlüssel für interne Aufrufe vom Wiki-Kern an die Zentrale (Brainbox-Werkzeuge für Claude über MCP)
+if [[ ! -s /etc/brainbox/intern.key ]]; then
+  (umask 077 && od -An -tx1 -N32 /dev/urandom | tr -d ' \n' >/etc/brainbox/intern.key)
+fi
 install -m 755 "${KIT_DIR}/connect/sync.mjs" /opt/brainbox-connect/sync.mjs
 
 # Outline-Kern auf Port 3100, davor die Zentrale auf Port 3000

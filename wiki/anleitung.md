@@ -36,7 +36,7 @@ Sobald ein Proxmox-Server verbunden ist, legt Brainbox für jede VM und jeden Co
 
 - **Alles ab der Überschrift „Notizen“ gehört dir.** Der Abgleich überschreibt nur den Teil darüber. Dort ist Platz für Passwort-Hinweise (nicht die Passwörter selbst), Anleitungen und Besonderheiten.
 - **Übersichten:** [Proxmox]({{proxmox}}) · [NetBird]({{netbird}}) · [Bereiche]({{bereiche}})
-- **Weiteren Server verbinden:** [Einstellungen → Brainbox → Proxmox-Server](/settings/brainbox-proxmox)
+- **Weiteren Server verbinden:** [Einstellungen → Brainbox → Proxmox-Server](/settings/brainbox-proxmox) – im selben Netz oder an einem anderen Standort (dann meldet sich der Server selbst). Dort kannst du Server auch jederzeit umbenennen.
 
 ## Bereiche: was wohin gehört
 
@@ -50,9 +50,16 @@ Bereiche sortieren Domains, VMs und Geräte nach Themen. Welche Regel gilt, legs
 
 Die erste passende Regel gewinnt. `Minecraft-Server/Survival` legt einen Unterbereich an. Eine VM erbt den Bereich ihrer Domain, ein NetBird-Gerät den seiner VM.
 
-## Claude schreibt mit
+## Claude hilft mit
 
-Unter [Einstellungen → Brainbox → Claude](/settings/brainbox-claude) bekommt Claude ein eigenes Konto. Danach kann Claude in der Claude-App oder in Claude Code Seiten suchen, lesen und schreiben. Was Claude geschrieben hat, steht immer mit Namen „Claude“ dran. Sperren geht unter **Einstellungen → Wiki → Mitglieder**.
+Claude arbeitet mit deiner Anmeldung direkt in Brainbox. Wie du Claude verbindest, steht unter [Einstellungen → Brainbox → Künstliche Intelligenz](/settings/brainbox-claude). Danach sagst du Claude einfach, was du willst – in der Claude-App oder in Claude Code:
+
+- „Such mir alles zum Minecraft-Server zusammen.“
+- „Schreib eine Anleitung zum Neustart und häng sie an die VM.“
+- „Füg meinen Proxmox in Frankfurt hinzu, an den kommt Brainbox nicht direkt ran.“
+- „Benenn proxmox-2 in zuhause um.“
+
+Brainbox bedienen darf Claude nur für Admins, und vor dem Entfernen oder einem Update fragt Claude nach. Was Claude schreibt, steht mit deinem Namen da.
 
 ## Leute einladen und anmelden
 

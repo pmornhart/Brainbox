@@ -3,10 +3,14 @@
 # Brainbox – Verbindungen (im Container: brainbox-connect)
 #
 #   brainbox-connect                  Menü: Claude, Proxmox, NetBird, Abgleich
-#   brainbox-connect claude [--json]  eigenes Konto "Claude" anlegen, Schlüssel und Anleitung
+#   brainbox-connect claude [--json]  Claude über MCP verbinden (mit deiner Anmeldung): Anleitung
 #   brainbox-connect proxmox          Proxmox-Server verwalten (Menü)
 #   brainbox-connect proxmox add NAME URL TOKEN-ID SECRET [--insecure]
 #                                     weiteren Proxmox-Server verbinden (beliebig viele)
+#   brainbox-connect proxmox agent NAME
+#                                     Server an anderem Standort: meldet sich selbst (Befehl für dort)
+#   brainbox-connect proxmox rename ALT NEU
+#                                     Namen ändern – die Wiki-Seiten werden mit umbenannt
 #   brainbox-connect proxmox remove NAME | list | test [NAME]
 #   brainbox-connect netbird [URL TOKEN] | netbird remove
 #                                     NetBird verbinden: Geräte, Netzwerke und Domains ins Wiki
@@ -27,6 +31,8 @@ CONF="${BRAINBOX_CONNECT_ENV:-${CONF_DIR}/connect.env}"
 SYNC="/opt/brainbox-connect/sync.mjs"
 PVE_FILE="${BRAINBOX_PROXMOX_FILE:-${CONF_DIR}/proxmox.json}"
 STATE="/var/lib/brainbox-connect/state.json"
+AGENT_DIR="/var/lib/brainbox/agent"
+SYNC_LOCK="/run/brainbox-sync.lock"
 PORT="3000"
 PG_DB_NAME="outline"
 
@@ -149,7 +155,7 @@ ensure_bot() { # Konto "Brainbox-Automatik" mit Schlüssel für den Abgleich
 run_sync() { # run_sync [--quiet]
   [[ -f "$SYNC" ]] || fail "Abgleich-Programm fehlt (${SYNC}) – update ausführen."
   local rc=0
-  flock -n -E 75 /run/brainbox-sync.lock env BRAINBOX_CONNECT_ENV="$CONF" BRAINBOX_CONNECT_STATE="$STATE" node "$SYNC" "$@" || rc=$?
+  flock -n -E 75 "$SYNC_LOCK" env BRAINBOX_CONNECT_ENV="$CONF" BRAINBOX_CONNECT_STATE="$STATE" node "$SYNC" "$@" || rc=$?
   if [[ $rc -eq 75 ]]; then warn "Abgleich läuft gerade schon."; return 0; fi
   return "$rc"
 }
@@ -215,24 +221,14 @@ cmd_start() {
   enable_timer
   run_sync "$@" || warn "Abgleich hat nicht geklappt – später: brainbox-connect sync"
   order_collections
+  claude_workspace_setup >/dev/null 2>&1 || true
   ok "Anleitung im Wiki (Sammlung 'Start') und Abgleich alle 5 Minuten eingerichtet"
 }
 
 # --- Claude ------------------------------------------------------------------------
 CLAUDE_COLLECTION="Von Claude"
 
-claude_guidance() { # Anweisung, die Claude beim Verbinden vom Wiki bekommt
-  cat <<EOF
-Du schreibst in diesem Wiki mit deinem eigenen Konto "Claude". Schreibe auf Deutsch, klar und knapp.
-- Suche vor dem Anlegen, ob es schon ein passendes Dokument gibt, und ergänze lieber dieses.
-- Lege neue Dokumente in einer bestehenden Sammlung an. Passt keine, nimm die Sammlung "${CLAUDE_COLLECTION}".
-- Lege keine neuen Sammlungen an: Sie wären nur für dich sichtbar.
-- In den Sammlungen "Proxmox" und "NetBird" wird alles oberhalb der Überschrift "Notizen" automatisch überschrieben. Schreibe dort nur unter "Notizen".
-- Schreibe keine Passwörter, Tokens oder Schlüssel ins Wiki.
-EOF
-}
-
-claude_workspace_setup() { # gemeinsame Sammlung "Von Claude" und Anweisung für Claude (als Admin)
+claude_workspace_setup() { # gemeinsame Sammlung "Von Claude"; alte Konto-Anweisung entfernen (als Admin)
   local found current
   session "$(first_admin)"
   found="$(api collections.list '{"limit":100}' | jq -r --arg n "$CLAUDE_COLLECTION" '.data[] | select(.name == $n) | .id' | head -n1)"
@@ -240,55 +236,43 @@ claude_workspace_setup() { # gemeinsame Sammlung "Von Claude" und Anweisung für
     api collections.create "$(jq -n --arg n "$CLAUDE_COLLECTION" '{name: $n, description: "Was Claude ins Wiki schreibt, wenn keine andere Sammlung passt.", icon: "lightbulb", color: "#8B5CF6", permission: "read_write", index: "a4"}')" >/dev/null &&
       ok "Gemeinsame Sammlung '${CLAUDE_COLLECTION}' angelegt"
   fi
+  # Früher bekam Claude ein eigenes Konto und dazu eine Anweisung. Heute arbeitet Claude mit der Anmeldung
+  # der Person, und die Beschreibung von Brainbox steckt im MCP-Anschluss selbst.
   current="$(api auth.info '{}' | jq -r '.data.team.guidanceMCP // empty')"
-  if [[ -z "$current" || "$current" == *"mit deinem eigenen Konto"* ]]; then
-    api team.update "$(jq -n --arg g "$(claude_guidance)" '{guidanceMCP: $g}')" >/dev/null &&
-      ok "Anweisung für Claude im Wiki hinterlegt (Einstellungen → Künstliche Intelligenz)"
-  else
-    warn "Im Wiki steht schon eine eigene Anweisung für KI-Assistenten – nicht überschrieben."
+  if [[ "$current" == *"mit deinem eigenen Konto"* ]]; then
+    api team.update '{"guidanceMCP": null}' >/dev/null && ok "Alte Anweisung für das Claude-Konto entfernt"
   fi
 }
 
-cmd_claude() {
-  local email key url link json="no"
-  [[ "${1:-}" == "--json" ]] && json="yes"
-  email="claude@$(wiki_host)"
-  url="$(wiki_url)"
-  create_user "Claude" "$email" member
-  claude_workspace_setup
-  key="$(conf_get CLAUDE_API_KEY)"
-  if ! key_works "$key"; then
-    key="$(create_api_key "$email" "Claude")"
-    [[ -n "$key" ]] || fail "Schlüssel für Claude konnte nicht erstellt werden."
-    conf_set CLAUDE_API_KEY "$key"
-    ok "Schlüssel für Claude erstellt"
-  fi
-  link="$(brainbox-login link --raw "$email" 2>/dev/null || true)"
-  if [[ "$json" == "yes" ]]; then
-    jq -n --arg e "$email" --arg m "${url}/mcp" --arg k "$key" --arg l "$link" '{email: $e, mcpUrl: $m, apiKey: $k, loginLink: $l}'
+cmd_claude() { # Claude verbindet sich über MCP mit der eigenen Anmeldung – kein eigenes Konto mehr
+  local url
+  url="$(wiki_url)"; url="${url%/}"
+  claude_workspace_setup >/dev/null 2>&1 || true
+  if [[ "${1:-}" == "--json" ]]; then
+    jq -n --arg m "${url}/mcp" '{mcpUrl: $m}'
     return 0
   fi
   cat <<EOF
 
-  ${BOLD}Claude hat jetzt ein eigenes Konto im Wiki${CL}
-  Name: Claude · E-Mail: ${email} · Rolle: Mitglied
-  Alles, was Claude schreibt, steht unter 'Claude' – du siehst immer, was von wem ist.
+  ${BOLD}Claude arbeitet mit deiner Anmeldung${CL} – ohne eigenes Konto.
+  Claude sucht, liest und schreibt im Wiki und bedient Brainbox (nur für Admins):
+  Proxmox-Server hinzufügen und umbenennen, NetBird, Abgleich, Update.
+  Einstellungen dazu im Wiki: Einstellungen → Brainbox → Künstliche Intelligenz.
 
-  ${BOLD}1. In der Claude-App (claude.ai, Handy, Desktop)${CL}
+  ${BOLD}1. In der Claude-App (claude.ai, Desktop, Handy)${CL}
      Braucht die HTTPS-Adresse (${url}) aus dem Internet erreichbar.
-     a) Im Browser abmelden (oder privates Fenster) und als Claude anmelden:
-        ${BL}${link:-brainbox-login link ${email}}${CL}
-     b) In Claude: Einstellungen → Connectors → Benutzerdefinierten Connector hinzufügen
-        Name: Brainbox · URL: ${BL}${url}/mcp${CL}
-     c) 'Verbinden' → im Anmeldefenster 'Zulassen' (du bist dort als Claude angemeldet)
+     Einstellungen → Connectors → Benutzerdefinierten Connector hinzufügen
+     Name: Brainbox · URL: ${BL}${url}/mcp${CL}
+     'Verbinden' → im Brainbox-Fenster mit deinem Konto anmelden → 'Zulassen'
 
   ${BOLD}2. In Claude Code${CL}
-     ${BL}claude mcp add --transport http brainbox ${url}/mcp --header "Authorization: Bearer ${key}"${CL}
-
-  Den Schlüssel geheim halten. Neu anzeigen: brainbox-connect claude
-  Abschalten: im Wiki unter Einstellungen → Benutzer → Claude sperren.
+     ${BL}claude mcp add --transport http brainbox ${url}/mcp${CL}
+     danach in Claude Code: /mcp → brainbox → anmelden
 
 EOF
+  if user_exists "claude@$(wiki_host)"; then
+    warn "Das alte Konto 'Claude' (claude@$(wiki_host)) braucht es nicht mehr – im Wiki unter Einstellungen → Wiki → Mitglieder sperren."
+  fi
 }
 
 # --- Proxmox -----------------------------------------------------------------------
@@ -348,14 +332,72 @@ pve_remove() { # pve_remove NAME
   pve_migrate
   [[ "$(pve_json | jq --arg n "$name" 'map(select(.name == $n)) | length')" != "0" ]] || fail "Kein Proxmox-Server '${name}'."
   pve_save "$(pve_json | jq --arg n "$name" 'map(select(.name != $n))')"
+  rm -f "${AGENT_DIR}/${name}.json"
   ok "Proxmox-Server '${name}' entfernt – seine Einträge werden beim Abgleich archiviert (nicht gelöscht)."
+  if [[ -n "$(conf_get OUTLINE_API_KEY)" ]]; then run_sync || true; fi
+}
+
+pve_clean_name() { echo "${1:-}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-' | head -c 31; }
+pve_has() { [[ "$(pve_json | jq --arg n "$1" 'map(select(.name == $n)) | length')" != "0" ]]; }
+
+pve_agent() { # pve_agent NAME [--raw] – Server an anderem Standort: meldet sich selbst über den Brainbox-Agenten
+  local name url token hash cmd public="yes" raw="${2:-}"
+  name="$(pve_clean_name "${1:-}")"
+  [[ -n "$name" ]] || fail "Beispiel: brainbox-connect proxmox agent standort-2"
+  url="$(wiki_url)"; url="${url%/}"
+  [[ -n "$url" ]] || fail "Wiki-Adresse fehlt (URL in ${ENV_FILE})."
+  pve_migrate
+  if pve_has "$name" && [[ "$(pve_json | jq -r --arg n "$name" '.[] | select(.name == $n) | .mode // "api"')" != "agent" ]]; then
+    fail "'${name}' ist schon direkt verbunden – anderen Namen wählen oder den Server erst entfernen."
+  fi
+  token="$(od -An -tx1 -N24 /dev/urandom | tr -d ' \n')"
+  hash="$(printf '%s' "$token" | sha256sum | awk '{print $1}')"
+  pve_save "$(pve_json | jq --arg n "$name" --arg h "$hash" --arg d "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    'map(select(.name != $n)) + [{name: $n, mode: "agent", tokenHash: $h, createdAt: $d}]')"
+  ensure_bot >/dev/null 2>&1 || true
+  enable_timer >/dev/null 2>&1 || true
+  cmd="curl -fsSL ${url}/zentrale/agent.sh | bash -s -- install ${url} ${token}"
+  [[ "$url" =~ ^https?://(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|127\.|localhost) ]] && public="no"
+  if [[ "$raw" == "--raw" ]]; then
+    jq -nc --arg n "$name" --arg c "$cmd" --arg u "$url" --arg p "$public" '{name: $n, command: $c, url: $u, public: ($p == "yes")}'
+    return 0
+  fi
+  ok "Server '${name}' angelegt. Jetzt auf dem Proxmox-Host am anderen Standort (Datacenter → Node → Shell) einmal ausführen:"
+  echo -e "\n     ${BL}${cmd}${CL}\n"
+  echo "  Der Agent liest dort alle 5 Minuten VMs und Container (nur lesend) und meldet sie an ${url}."
+  [[ "$public" == "yes" ]] || warn "${url} ist nur im Heimnetz erreichbar – der andere Standort braucht eine Adresse, die er erreicht (z. B. über den Reverse-Proxy)."
+  echo "  Neuer Befehl (alter Token wird ungültig): brainbox-connect proxmox agent ${name}"
+}
+
+pve_rename() { # pve_rename ALT NEU – Namen ändern; Wiki-Seiten werden mit umbenannt, nicht neu angelegt
+  local old new tmp
+  old="${1:-}"; new="$(pve_clean_name "${2:-}")"
+  [[ -n "$old" && -n "$new" ]] || fail "Beispiel: brainbox-connect proxmox rename proxmox-2 zuhause"
+  pve_migrate
+  pve_has "$old" || fail "Kein Proxmox-Server '${old}'."
+  if [[ "$old" == "$new" ]]; then ok "Der Server heißt schon '${new}'."; return 0; fi
+  ! pve_has "$new" || fail "Es gibt schon einen Proxmox-Server '${new}'."
+  # unter der Sperre des Abgleichs, damit ein gerade laufender Abgleich nichts zurückschreibt
+  (
+    flock -w 300 9 || exit 75
+    pve_save "$(pve_json | jq --arg o "$old" --arg n "$new" 'map(if .name == $o then .name = $n else . end)')"
+    if [[ -f "$STATE" ]]; then
+      tmp="$(mktemp "${STATE}.XXXX")"
+      jq --arg o "$old" --arg n "$new" '.docs |= with_entries(
+        if .key == ("pvesrv:" + $o) then .key = ("pvesrv:" + $n)
+        elif (.key | startswith("pve:" + $o + ":")) then .key = ("pve:" + $n + ":" + (.key | ltrimstr("pve:" + $o + ":")))
+        else . end)' "$STATE" >"$tmp" && chmod --reference="$STATE" "$tmp" && mv "$tmp" "$STATE"
+    fi
+    if [[ -f "${AGENT_DIR}/${old}.json" ]]; then mv "${AGENT_DIR}/${old}.json" "${AGENT_DIR}/${new}.json"; fi
+  ) 9>"$SYNC_LOCK" || fail "Der Abgleich läuft gerade – bitte gleich nochmal versuchen."
+  ok "Proxmox-Server '${old}' heißt jetzt '${new}'."
   if [[ -n "$(conf_get OUTLINE_API_KEY)" ]]; then run_sync || true; fi
 }
 
 pve_list() {
   pve_migrate
   if [[ "$(pve_count)" == "0" ]]; then echo "  Noch kein Proxmox-Server verbunden – brainbox-connect proxmox add …"; return 0; fi
-  pve_json | jq -r '.[] | "  \(.name)\t\(.url)\t\(.tokenId)\(if .insecure then "\t(Zertifikat ungeprüft)" else "" end)"' | column -t -s $'\t'
+  pve_json | jq -r '.[] | if .mode == "agent" then "  \(.name)\tmeldet sich selbst (Brainbox-Agent)" else "  \(.name)\t\(.url)\t\(.tokenId)\(if .insecure then "\t(Zertifikat ungeprüft)" else "" end)" end' | awk -F'\t' '{ printf "%-18s", $1; for (i = 2; i <= NF; i++) printf "  %s", $i; print "" }'
 }
 
 pve_menu() {
@@ -363,8 +405,8 @@ pve_menu() {
   local choice name url tid sec ins gw items=()
   pve_migrate
   while :; do
-    items=(neu "+ Proxmox-Server hinzufügen")
-    while IFS=$'\t' read -r n u; do [[ -n "$n" ]] && items+=("$n" "$u"); done < <(pve_json | jq -r '.[] | "\(.name)\t\(.url)"')
+    items=(neu "+ Proxmox-Server im selben Netz" fern "+ Proxmox-Server an anderem Standort")
+    while IFS=$'\t' read -r n u; do [[ -n "$n" ]] && items+=("$n" "$u"); done < <(pve_json | jq -r '.[] | "\(.name)\t\(if .mode == "agent" then "meldet sich selbst" else .url end)"')
     choice="$(wt --title "PROXMOX-SERVER" --cancel-button "Zurück" --menu "Verbundene Server – jeder bekommt im Wiki eine eigene Seite, seine VMs und Container hängen darunter.\nServer wählen zum Prüfen oder Entfernen." 20 76 10 "${items[@]}")" || return 0
     if [[ "$choice" == "neu" ]]; then
       gw="$(ip route 2>/dev/null | awk '/^default/ {print $3; exit}')"
@@ -376,12 +418,24 @@ pve_menu() {
       ins=""
       wt --title "NEUER PROXMOX-SERVER" --yesno "Proxmox nutzt meist ein selbst ausgestelltes Zertifikat.\n\nZertifikat nicht prüfen? (Im Heimnetz üblich.)" 11 72 && ins="--insecure"
       clear; (pve_add "$name" "$url" "$tid" "$sec" $ins) || true; read -rp "  Weiter mit Enter … " _
+    elif [[ "$choice" == "fern" ]]; then
+      name="$(wt --title "PROXMOX AN ANDEREM STANDORT" --inputbox "Brainbox kommt an diesen Server nicht heran – er meldet sich selbst.\n\nKurzer Name (z. B. standort-2, hetzner)" 12 72)" || continue
+      clear; (pve_agent "$name") || true; read -rp "  Weiter mit Enter … " _
     else
-      if wt --title "SERVER ${choice}" --yes-button "Prüfen" --no-button "Entfernen" --yesno "Was soll mit '${choice}' passieren?" 9 60; then
-        clear; (run_sync --test pve "$choice") || true; read -rp "  Weiter mit Enter … " _
-      elif wt --title "SERVER ${choice}" --defaultno --yesno "'${choice}' wirklich entfernen? Seine Wiki-Einträge werden archiviert." 9 66; then
-        clear; (pve_remove "$choice") || true; read -rp "  Weiter mit Enter … " _
-      fi
+      local what
+      what="$(wt --title "SERVER ${choice}" --cancel-button "Zurück" --menu "Was soll mit '${choice}' passieren?" 14 66 4 \
+        pruefen "Verbindung prüfen" umbenennen "Namen ändern" befehl "Neuer Agent-Befehl (nur bei Standort-Servern)" entfernen "Entfernen")" || continue
+      case "$what" in
+      pruefen) clear; (run_sync --test pve "$choice") || true; read -rp "  Weiter mit Enter … " _ ;;
+      umbenennen)
+        name="$(wt --title "SERVER ${choice}" --inputbox "Neuer Name (Kleinbuchstaben, Ziffern, Bindestrich)" 9 66 "$choice")" || continue
+        clear; (pve_rename "$choice" "$name") || true; read -rp "  Weiter mit Enter … " _ ;;
+      befehl) clear; (pve_agent "$choice") || true; read -rp "  Weiter mit Enter … " _ ;;
+      entfernen)
+        if wt --title "SERVER ${choice}" --defaultno --yesno "'${choice}' wirklich entfernen? Seine Wiki-Einträge werden archiviert." 9 66; then
+          clear; (pve_remove "$choice") || true; read -rp "  Weiter mit Enter … " _
+        fi ;;
+      esac
     fi
   done
 }
@@ -391,6 +445,8 @@ cmd_proxmox() {
   "") pve_menu ;;
   add) shift; pve_add "$@" ;;
   remove | entfernen) shift; pve_remove "$@" ;;
+  agent | standort) shift; pve_agent "$@" ;;
+  rename | umbenennen) shift; pve_rename "$@" ;;
   list | liste) pve_list ;;
   test) shift; pve_migrate; run_sync --test pve "$@" ;;
   --from-install)
@@ -402,7 +458,7 @@ cmd_proxmox() {
     ok "Proxmox verbunden – neue VMs und Container landen alle 5 Minuten automatisch im Wiki (Sammlung 'Proxmox')."
     ;;
   http* | *:*) pve_add "$(pve_name_from_url "$1")" "$@" ;; # alte Form: proxmox URL TOKEN-ID SECRET [--insecure]
-  *) fail "Unbekannt: proxmox $1 (add, remove, list, test)" ;;
+  *) fail "Unbekannt: proxmox $1 (add, agent, rename, remove, list, test)" ;;
   esac
 }
 
@@ -438,7 +494,7 @@ status() {
   local last t
   echo
   echo -e "  ${BOLD}Brainbox – Verbindungen${CL}"
-  if user_exists "claude@$(wiki_host)"; then echo -e "  Claude:     ${GN}eigenes Konto${CL} (claude@$(wiki_host)) · MCP: $(wiki_url)/mcp"; else echo -e "  Claude:     ${YW}nicht eingerichtet${CL} – brainbox-connect claude"; fi
+  echo -e "  Claude:     über MCP mit deiner Anmeldung · $(wiki_url)/mcp (brainbox-connect claude)"
   pve_migrate
   if [[ "$(pve_count)" != "0" ]]; then echo -e "  Proxmox:    ${GN}$(pve_count) Server${CL} ($(pve_json | jq -r '[.[].name] | join(", ")'))"; else echo -e "  Proxmox:    ${YW}nicht verbunden${CL} – brainbox-connect proxmox add …"; fi
   if [[ -n "$(conf_get NETBIRD_URL)" ]]; then echo -e "  NetBird:    ${GN}verbunden${CL} ($(conf_get NETBIRD_URL))"; else echo -e "  NetBird:    ${YW}nicht verbunden${CL} – brainbox-connect netbird"; fi

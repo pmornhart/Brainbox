@@ -52,17 +52,18 @@ const cfg = readEnv(CONF_FILE);
 const OUTLINE_URL = (cfg.OUTLINE_URL || "http://127.0.0.1:3000").replace(/\/$/, "");
 const PVE_FILE = process.env.BRAINBOX_PROXMOX_FILE || "/etc/brainbox/proxmox.json";
 // Mehrere Proxmox-Server: [{ name, url, tokenId, secret, insecure, caFile }]
+// oder an anderen Standorten: [{ name, mode: "agent", tokenHash }] – die melden sich selbst (connect/pve-agent.sh)
 function loadServers() {
   try {
     const list = JSON.parse(fs.readFileSync(PVE_FILE, "utf8"));
-    if (Array.isArray(list)) return list.filter((x) => x && x.name && x.url && x.tokenId && x.secret);
+    if (Array.isArray(list)) return list.filter((x) => x && x.name && (x.mode === "agent" || (x.url && x.tokenId && x.secret)));
   } catch { /* noch keine Liste */ }
   if (cfg.PVE_URL && cfg.PVE_TOKEN_ID && cfg.PVE_TOKEN_SECRET) {
     return [{ name: "proxmox", url: cfg.PVE_URL, tokenId: cfg.PVE_TOKEN_ID, secret: cfg.PVE_TOKEN_SECRET, insecure: ["1", "yes"].includes(cfg.PVE_INSECURE), caFile: cfg.PVE_CA_FILE || "" }];
   }
   return [];
 }
-const SERVERS = loadServers().map((x) => ({ ...x, url: String(x.url).replace(/\/$/, "") }));
+const SERVERS = loadServers().map((x) => ({ ...x, url: String(x.url || "").replace(/\/$/, "") }));
 const NB_URL = (cfg.NETBIRD_URL || "").replace(/\/$/, "");
 const KIT_DIR = process.env.BRAINBOX_KIT_DIR || "/opt/brainbox-kit";
 // Feste Reihenfolge der Brainbox-Sammlungen in der Seitenleiste (Fractional Index)
@@ -127,7 +128,33 @@ function pveTls(srv) {
   const ca = srv.caFile && fs.existsSync(srv.caFile) ? fs.readFileSync(srv.caFile) : undefined;
   return { ca, insecure: !!srv.insecure };
 }
+// Server an anderen Standorten: Daten aus ihrer letzten Meldung statt aus der API
+const AGENT_DIR = process.env.BRAINBOX_AGENT_DIR || "/var/lib/brainbox/agent";
+const AGENT_MAX_AGE_MIN = 15;
+const MS_PER_MIN = 60000;
+function agentSnapshot(srv) {
+  if (srv.snap === undefined) {
+    try { srv.snap = JSON.parse(fs.readFileSync(path.join(AGENT_DIR, `${srv.name}.json`), "utf8")); } catch { srv.snap = null; }
+    if (srv.snap?.url) srv.url = srv.snap.url;
+  }
+  return srv.snap;
+}
+const agentAge = (snap) => Math.round((Date.now() - new Date(snap?.receivedAt || 0).getTime()) / MS_PER_MIN);
+function agentData(srv, p) {
+  const snap = agentSnapshot(srv);
+  if (!snap) throw new Error(`Proxmox „${srv.name}“ hat sich noch nicht gemeldet – den Agent-Befehl auf dem Server ausführen (Einstellungen → Brainbox → Proxmox-Server).`);
+  const age = agentAge(snap);
+  if (!(age <= AGENT_MAX_AGE_MIN)) throw new Error(`Proxmox „${srv.name}“ meldet sich nicht mehr (zuletzt vor ${age} Min.) – läuft der Brainbox-Agent dort noch?`);
+  if (p === "/version") return snap.version;
+  if (p === "/nodes") return snap.nodes;
+  if (p.startsWith("/cluster/resources")) return snap.resources;
+  const m = p.match(/^\/nodes\/([^/]+)\/(lxc|qemu)\/(\d+)\/(config|interfaces|agent\/network-get-interfaces)$/);
+  const found = m && (m[4] === "config" ? snap.configs : snap.interfaces)?.[`${m[1]}/${m[2]}/${m[3]}`];
+  if (found) return found;
+  throw new Error(`Proxmox „${srv.name}“ ${p}: nicht in der Meldung`);
+}
 async function pve(srv, p) {
+  if (srv.mode === "agent") return agentData(srv, p);
   const res = await request(`${srv.url}/api2/json${p}`, {
     headers: { Authorization: `PVEAPIToken=${srv.tokenId}=${srv.secret}` },
     ...pveTls(srv),
@@ -567,6 +594,7 @@ async function main() {
   const guests = [];
   for (const srv of SERVERS) {
     const info = { srv, ok: false, error: "", version: "", nodes: [], guests: [] };
+    if (srv.mode === "agent") agentSnapshot(srv);
     try {
       info.version = (await pve(srv, "/version"))?.version || "";
       info.nodes = (await pve(srv, "/nodes")) || [];
@@ -652,19 +680,23 @@ async function main() {
     for (const info of servers) {
       const name = info.srv.name;
       const head = info.ok
-        ? `🟢 **erreichbar** · Proxmox VE ${esc(info.version)} · **${info.guests.length}** VMs und Container, davon **${info.guests.filter((g) => g.status === "running").length}** an`
-        : `🔴 **nicht erreichbar** – ${esc(info.error)}\n\nDie Einträge bleiben stehen, bis der Server wieder antwortet.`;
+        ? `🟢 **${info.srv.mode === "agent" ? "meldet sich" : "erreichbar"}** · Proxmox VE ${esc(info.version)} · **${info.guests.length}** VMs und Container, davon **${info.guests.filter((g) => g.status === "running").length}** an`
+        : `🔴 **${info.srv.mode === "agent" ? "keine Meldung" : "nicht erreichbar"}** – ${esc(info.error)}\n\nDie Einträge bleiben stehen, bis der Server wieder antwortet.`;
       const nodes = info.nodes.length
         ? `\n\n### Nodes\n\n| Node | Status | CPU | RAM | Läuft seit |\n|---|---|---|---|---|\n${info.nodes.map((n) => `| ${esc(n.node)} | ${n.status === "online" ? "🟢 online" : "⚪ " + esc(n.status || "offline")} | ${pct((n.cpu || 0) * (n.maxcpu || 0), n.maxcpu)} von ${n.maxcpu || "–"} Kernen | ${gb(n.mem)} von ${gb(n.maxmem)} | ${uptime(n.uptime)} |`).join("\n")}`
         : "";
       const list = info.guests.length
         ? `\n\n### VMs und Container\n\n| ID | Name | Status | IP | NetBird | Domains | Bereich |\n|---|---|---|---|---|---|---|\n${info.guests.map((g) => row(g, false)).join("\n")}`
         : "";
+      const addr = info.srv.url ? `| **Adresse** | [${esc(info.srv.url)}](${info.srv.url}) |` : "| **Adresse** | – |";
+      const access = info.srv.mode === "agent"
+        ? `| **Verbindung** | meldet sich selbst (Brainbox-Agent, alle 5 Minuten)${info.srv.snap ? ` · zuletzt ${new Date(info.srv.snap.receivedAt).toLocaleString("de-DE", { timeZone: process.env.TZ || "Europe/Berlin" })}` : " · noch keine Meldung"} |`
+        : `| **Zugang** | ${esc(info.srv.tokenId)} (nur lesen) |`;
       await writeDoc(state, `pvesrv:${name}`, srvTitle(name),
-        `${head}\n\n| Eigenschaft | Wert |\n|---|---|\n| **Adresse** | [${esc(info.srv.url)}](${info.srv.url}) |\n| **Zugang** | ${esc(info.srv.tokenId)} (nur lesen) |${nodes}${list}`);
+        `${head}\n\n| Eigenschaft | Wert |\n|---|---|\n${addr}\n${access}${nodes}${list}`);
     }
     const running = guests.filter((g) => g.status === "running").length;
-    const srvRows = servers.map((i) => `| ${link(state.docs[`pvesrv:${i.srv.name}`], i.srv.name)} | ${i.ok ? "🟢 erreichbar" : "🔴 nicht erreichbar"} | ${esc(i.version || "–")} | ${i.nodes.length || "–"} | ${i.guests.length} |`);
+    const srvRows = servers.map((i) => `| ${link(state.docs[`pvesrv:${i.srv.name}`], i.srv.name)} | ${i.ok ? (i.srv.mode === "agent" ? "🟢 meldet sich" : "🟢 erreichbar") : "🔴 nicht erreichbar"} | ${esc(i.version || "–")} | ${i.nodes.length || "–"} | ${i.guests.length} |`);
     await writeDoc(state, "pve:overview", "Proxmox – Übersicht",
       `**${servers.length}** Proxmox-Server · **${guests.length}** VMs und Container, davon **${running}** gerade an. Weitere Server verbindest du unter [Einstellungen → Brainbox → Proxmox-Server](/settings/brainbox-proxmox).\n\n| Server | Status | Version | Nodes | VMs/Container |\n|---|---|---|---|---|\n${srvRows.join("\n")}\n\n### Alle VMs und Container\n\n${header}\n${guests.map((g) => row(g)).join("\n")}`);
   }
@@ -761,7 +793,7 @@ async function main() {
     at: new Date().toISOString(),
     proxmox: usePve ? {
       servers: servers.map((i) => ({
-        name: i.srv.name, ok: i.ok, version: i.version, nodes: i.nodes.length,
+        name: i.srv.name, ok: i.ok, version: i.version, nodes: i.nodes.length, agent: i.srv.mode === "agent",
         guests: i.guests.length, running: i.guests.filter((g) => g.status === "running").length,
         url: state.docs[`pvesrv:${i.srv.name}`]?.url || null,
       })),

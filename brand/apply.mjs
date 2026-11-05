@@ -109,7 +109,14 @@ patch("server/static/index.html", [
 // --- Name -------------------------------------------------------------------------------------
 patch("server/env.ts", [["App-Name", 'public APP_NAME = "Outline";', 'public APP_NAME = "Brainbox";']]);
 // So meldet sich das Wiki bei Claude (MCP), in der Browser-Suche und als App auf dem Handy
-patch("server/mcp/index.ts", [["MCP-Name", 'name: "outline",\n      title: "Outline",', 'name: "brainbox",\n      title: "Brainbox",']]);
+patch("server/mcp/index.ts", [
+  ["MCP-Name", 'name: "outline",\n      title: "Outline",', 'name: "brainbox",\n      title: "Brainbox",'],
+  // Brainbox-Werkzeuge für Claude (Status, Proxmox, NetBird, Abgleich, Update) und Anweisungen zu Brainbox
+  ["MCP Brainbox-Import", 'import { userTools } from "./tools/users";', 'import { userTools } from "./tools/users";\nimport { brainboxInstructions, brainboxTools } from "./tools/brainbox";'],
+  ["MCP Brainbox-Werkzeuge", "  userTools(server, scopes);\n", "  userTools(server, scopes);\n  brainboxTools(server, scopes);\n"],
+  ["MCP Brainbox-Anweisungen", "  const instructions = guidance\n    ? `${defaultInstructions}\\n\\n${guidance}`\n    : defaultInstructions;",
+    "  const base = `${defaultInstructions}\\n\\n${brainboxInstructions}`;\n  const instructions = guidance ? `${base}\\n\\n${guidance}` : base;"],
+]);
 patch("server/routes/app.ts", [["Such-Titel", 'href="/opensearch.xml"\n      title="Outline"', 'href="/opensearch.xml"\n      title="Brainbox"']]);
 patch("vite.config.mts", [["App-Manifest", 'name: "Outline",\n          short_name: "Outline",\n          theme_color: "#fff",\n          background_color: "#fff",',
   `name: "Brainbox",\n          short_name: "Brainbox",\n          theme_color: "${C.bg}",\n          background_color: "${C.bg}",`]]);
@@ -147,6 +154,8 @@ override("app/scenes/Home.tsx", "function Home()");
 override("app/scenes/Login/components/Background.tsx", "export const Background = styled(Fade)");
 // Menü unter dem eigenen Namen: Konto-Einstellungen oben
 override("app/menus/AccountMenu.tsx", "const AccountMenu: React.FC<Props>");
+// neu: Brainbox-Werkzeuge für Claude im MCP-Server
+override("server/mcp/tools/brainbox.ts");
 
 // --- Seitenleiste: Einstellungen und Update-Symbol oben, Konsole-Optik ------------------------------------
 patch("app/components/Sidebar/App.tsx", [
