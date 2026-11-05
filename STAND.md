@@ -107,7 +107,8 @@ _Zuletzt aktualisiert: 05.11.2026_
 
 ## Offen / nächste Schritte
 
-- **Philip fragen: Brainbox 1.1.0 nach `main` übernehmen?** Liegt fertig getestet auf `claude/dazzling-curie-an4hqr`. Danach zeigt seine Brainbox „Update verfügbar · 1.1.0“.
+- Erledigt 05.11.2026: Brainbox 1.1.0 nach `main` übernommen (Philip: „bring mal das update raus“). Installationen zeigen innerhalb von 6 Std. „Update verfügbar · 1.1.0“, sofort mit `update` im Container.
+- Philip fragte 05.11.: „Wieso bin ich kein Admin?“ – laut Wiki ist sein Konto Admin (Rolle `admin`). Wartet auf Screenshot, wo es anders aussieht.
 - Der Tag `v1.0.0` ließ sich aus der Cloud nicht pushen (403). Philip kann ihn bei Bedarf auf GitHub als Release anlegen.
 - Erledigt 04.11.2026: Brainbox 1.0.0 nach `main` übernommen, Tag `v1.0.0`. Ab jetzt zeigen Installationen „Update verfügbar“, sobald `brainbox.version` auf `main` hochgezählt wird.
 - Für ein Update an Philips Installationen: Änderung auf `main`, `BRAINBOX_VERSION` erhöhen, `CHANGELOG.md` ergänzen, Tag setzen.
