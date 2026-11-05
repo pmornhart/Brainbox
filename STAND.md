@@ -107,6 +107,13 @@ _Zuletzt aktualisiert: 05.11.2026_
 
 ## Offen / nächste Schritte
 
+- **Brainbox 1.2.0 – Reverse-Proxy-Domains** (Philip 05.11.: „das Wiki sieht die Reverse Proxys, also die Domains nicht“):
+  - Sein Wiki zeigte „3 Netzwerke · 0 Domains“: Seine Domains liegen im NetBird-Reverse-Proxy (Reverse Proxy → Services, ab NetBird 0.65), nicht in den Netzwerk-Ressourcen.
+  - `connect/sync.mjs` liest `GET /api/reverse-proxies/services` (Felder: `domain`, `mode`, `listen_port`, `enabled`, `terminated`, `private`, `meta.status`, `auth.*.enabled`, `targets[]` mit `target_type`, `target_id`, `host`, `port`, `path`). Passwort/PIN/Header-Werte werden nie gelesen oder geschrieben.
+  - Zuordnung über das Ziel: Peer → Gast (über `peerOf`) bzw. IP → Gast (LAN-IP) oder Peer-IP; erst wenn das nichts findet, über den Namen.
+  - Domains-Seite: Domain | Quelle | Ziel | Status | Schutz | Gehört zu | Bereich. Geräte-Seiten und NetBird-Übersicht zeigen Domains. 404 → Hinweis „ab NetBird 0.65“, 403 → Hinweis „Rolle Admin“.
+  - Getestet mit nachgebauter API (5 Dienste: Peer, LAN-IP, TCP 25565, privat, aus), ohne Netzwerk-Domains, mit 404 und 403; Suche nach den Test-Geheimnissen: 0 Treffer.
+
 - Erledigt 05.11.2026: Brainbox 1.1.0 nach `main` übernommen (Philip: „bring mal das update raus“). Installationen zeigen innerhalb von 6 Std. „Update verfügbar · 1.1.0“, sofort mit `update` im Container.
 - Behoben 05.11.: Philip sah „Nur für Admins“, obwohl sein Konto Admin ist (per MCP geprüft).
   - Ursache: Die Zentrale verglich bei Aktionen die Herkunft (`Origin`) nur mit der `Host`-Kopfzeile. Schreibt der Reverse-Proxy `Host` auf die interne IP um, kam 403, und die Seite zeigte jede 403 als „Nur für Admins“.
