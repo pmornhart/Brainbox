@@ -71,10 +71,11 @@ RestartSec=2
 WantedBy=multi-user.target
 EOF
 
-# Wiki-Bild: Brainbox-Logo, solange keins gewählt ist (für Installationen von vor 1.0.0)
+# Wiki-Bild: Brainbox-Logo, solange keins gewählt ist (für Installationen von vor 1.0.0).
+# Seit 1.4.1 unter eigenem Namen – unter „icon-192.png“ zeigen Browser oft noch das alte Outline-Bild aus dem Zwischenspeicher.
 if command -v psql >/dev/null 2>&1; then
   (cd /tmp && sudo -u postgres psql -d outline -qtAc \
-    "UPDATE teams SET \"avatarUrl\" = '/images/icon-192.png' WHERE \"avatarUrl\" IS NULL OR \"avatarUrl\" = '';") >/dev/null 2>&1 || true
+    "UPDATE teams SET \"avatarUrl\" = '/images/brainbox-192.png' WHERE \"avatarUrl\" IS NULL OR \"avatarUrl\" = '' OR \"avatarUrl\" LIKE '%/images/icon-192.png';") >/dev/null 2>&1 || true
 fi
 
 systemctl daemon-reload >/dev/null 2>&1 || true
