@@ -9,7 +9,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { zuordnung, PHOSPHOR_VERSION } from "./zuordnung.mjs";
+import { zuordnung, extras, PHOSPHOR_VERSION } from "./zuordnung.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const assets = process.argv[2];
@@ -37,7 +37,7 @@ const form = (name) => {
   return JSON.stringify(name);
 };
 
-const exporte = Object.entries(zuordnung).map(([symbol, wert]) => {
+const exporte = Object.entries({ ...zuordnung, ...extras }).map(([symbol, wert]) => {
   const auswahl =
     typeof wert === "string"
       ? `fixed(${form(wert)})`
@@ -138,4 +138,4 @@ ${exporte.join("\n")}
 
 fs.mkdirSync(path.dirname(ziel), { recursive: true });
 fs.writeFileSync(ziel, tsx);
-console.log(`${Object.keys(zuordnung).length} Symbole, ${formen.size} Formen → ${path.relative(process.cwd(), ziel)} (${Math.round(tsx.length / 1024)} KB)`);
+console.log(`${Object.keys(zuordnung).length} Symbole + ${Object.keys(extras).length} eigene, ${formen.size} Formen → ${path.relative(process.cwd(), ziel)} (${Math.round(tsx.length / 1024)} KB)`);

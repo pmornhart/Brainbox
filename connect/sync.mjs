@@ -1,18 +1,21 @@
 #!/usr/bin/env node
 // -----------------------------------------------------------------------------
-// Brainbox-Abgleich: Proxmox und NetBird → Wiki
+// Brainbox-Abgleich: Proxmox, NetBird und GitHub → Wiki
 //
 // Legt für jede VM, jeden Container, jedes NetBird-Gerät und jede Domain einen
 // Wiki-Eintrag an, hält ihn aktuell und verknüpft, was zusammengehört.
 // Über die Wiki-Seite „Zuordnungsregeln“ (Sammlung „Bereiche“) ordnest du
 // Domains, VMs und Geräte Bereichen zu, z. B. *.morninghosting.de → Minecraft-Server.
 // Alles ab der Überschrift „Notizen“ gehört dir und bleibt erhalten.
+// Aus GitHub kommt je Repo eine Seite: was drin ist, wie man es installiert und wo es läuft;
+// jede VM und jeder Container zeigt seine Herkunft (community-scripts, eigenes Repo, Regel).
 // Dazu pflegt er die Sammlung „Start“ mit Anleitung und Spickzettel und
 // schreibt eine Zusammenfassung für die Startseite des Wikis.
 //
 //   node sync.mjs              abgleichen
 //   node sync.mjs --test pve [NAME]  Verbindung zu Proxmox prüfen (alle oder einen Server)
 //   node sync.mjs --test netbird
+//   node sync.mjs --test github
 //   node sync.mjs --quiet      nur Fehler und Änderungen ausgeben
 //
 // Einstellungen: /etc/brainbox/connect.env, Proxmox-Server: /etc/brainbox/proxmox.json
@@ -24,6 +27,7 @@ import path from "node:path";
 import http from "node:http";
 import https from "node:https";
 import crypto from "node:crypto";
+import { readmeParts, repoFiles, fallbackInstall, originOf, originRule, communitySlug, stripHtml } from "./github.mjs";
 
 const CONF_FILE = process.env.BRAINBOX_CONNECT_ENV || "/etc/brainbox/connect.env";
 const STATE_FILE = process.env.BRAINBOX_CONNECT_STATE || "/var/lib/brainbox-connect/state.json";
@@ -65,9 +69,14 @@ function loadServers() {
 }
 const SERVERS = loadServers().map((x) => ({ ...x, url: String(x.url || "").replace(/\/$/, "") }));
 const NB_URL = (cfg.NETBIRD_URL || "").replace(/\/$/, "");
+// GitHub: Token (nur lesen) und/oder Konten, deren öffentliche Repos ins Wiki sollen
+const GH_API = (cfg.GITHUB_API_URL || "https://api.github.com").replace(/\/$/, "");
+const GH_OWNERS = String(cfg.GITHUB_OWNERS || "").split(/[\s,]+/).map((x) => x.trim()).filter(Boolean);
+const GH_FORKS = ["1", "yes", "true"].includes(String(cfg.GITHUB_FORKS || "").toLowerCase());
+const GH_ARCHIVED = ["1", "yes", "true"].includes(String(cfg.GITHUB_ARCHIVED || "").toLowerCase());
 const KIT_DIR = process.env.BRAINBOX_KIT_DIR || "/opt/brainbox-kit";
 // Feste Reihenfolge der Brainbox-Sammlungen in der Seitenleiste (Fractional Index)
-const COLLECTION_INDEX = { start: "a0", areas: "a1", proxmox: "a2", netbird: "a3" };
+const COLLECTION_INDEX = { start: "a0", areas: "a1", proxmox: "a2", netbird: "a3", github: "a3V" };
 
 // --- HTTP ----------------------------------------------------------------------
 function request(url, { method = "GET", headers = {}, body, ca, insecure = false, timeout = 30000 } = {}) {
@@ -176,6 +185,103 @@ async function netbird(p) {
   return res.json;
 }
 
+// --- GitHub-API -------------------------------------------------------------------------
+const GH_PAGES_MAX = 10;
+const GH_RESERVE = 5; // so viele Anfragen bleiben übrig (ohne Token gibt GitHub nur 60 je Stunde)
+const ghLimit = { remaining: Infinity };
+async function github(p, { raw = false } = {}) {
+  const res = await request(p.startsWith("http") ? p : `${GH_API}${p}`, {
+    headers: {
+      Accept: raw ? "application/vnd.github.raw+json" : "application/vnd.github+json",
+      "User-Agent": "Brainbox-Wiki",
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...(cfg.GITHUB_TOKEN ? { Authorization: `Bearer ${cfg.GITHUB_TOKEN}` } : {}),
+    },
+  });
+  const left = Number(res.headers["x-ratelimit-remaining"]);
+  if (Number.isFinite(left)) ghLimit.remaining = left;
+  if (res.status === 404 || res.status === 409) return null; // fehlt oder leeres Repo
+  if (res.status !== 200) {
+    const msg = res.status === 401 ? "Token ungültig oder abgelaufen" : res.status === 403 && ghLimit.remaining === 0 ? "zu viele Anfragen – GitHub erlaubt ohne Token nur 60 je Stunde" : (res.json?.message || res.text || "").toString().slice(0, 120);
+    const err = new Error(`GitHub ${p.replace(GH_API, "")}: HTTP ${res.status} ${msg}`);
+    err.status = res.status;
+    throw err;
+  }
+  return { body: raw ? res.text : res.json, next: /<([^>]+)>;\s*rel="next"/.exec(String(res.headers.link || ""))?.[1] || null };
+}
+async function githubAll(p) {
+  const out = [];
+  let url = p;
+  for (let i = 0; url && i < GH_PAGES_MAX; i++) {
+    const r = await github(url);
+    if (!r) break;
+    out.push(...(Array.isArray(r.body) ? r.body : []));
+    url = r.next;
+  }
+  return out;
+}
+
+// Repos holen; README und Dateien nur neu lesen, wenn sich das Repo geändert hat
+const GH_PARSE_VERSION = 1;
+async function githubList() {
+  let login = null;
+  const list = [];
+  if (cfg.GITHUB_TOKEN) {
+    login = (await github("/user"))?.body?.login || null;
+    list.push(...await githubAll("/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member"));
+  }
+  for (const o of GH_OWNERS) {
+    if (list.some((r) => r.owner?.login?.toLowerCase() === o.toLowerCase())) continue;
+    list.push(...await githubAll(`/users/${encodeURIComponent(o)}/repos?per_page=100&sort=pushed&type=owner`));
+  }
+  const seen = new Set();
+  const owners = GH_OWNERS.map((o) => o.toLowerCase());
+  const repos = list.filter((r) => {
+    if (!r?.full_name || seen.has(r.full_name.toLowerCase())) return false;
+    seen.add(r.full_name.toLowerCase());
+    if (owners.length && !owners.includes(String(r.owner?.login || "").toLowerCase())) return false;
+    if (r.fork && !GH_FORKS) return false;
+    if (r.archived && !GH_ARCHIVED) return false;
+    return true;
+  });
+  repos.sort((a, b) => String(b.pushed_at || "").localeCompare(String(a.pushed_at || "")));
+  return { login, repos, seen };
+}
+async function githubData(state) {
+  state.github ||= { repos: {} };
+  const { login, repos, seen } = await githubList();
+  let skipped = 0;
+  for (const r of repos) {
+    const cache = state.github.repos[r.full_name];
+    if (cache && cache.pushedAt === r.pushed_at && cache.v === GH_PARSE_VERSION) { r.details = cache; continue; }
+    if (ghLimit.remaining <= GH_RESERVE) { r.details = cache || null; skipped++; continue; }
+    try {
+      const branch = r.default_branch || "main";
+      const readme = await github(`/repos/${r.full_name}/readme`, { raw: true });
+      const top = await github(`/repos/${r.full_name}/contents?ref=${encodeURIComponent(branch)}`);
+      const entries = Array.isArray(top?.body) ? top.body : [];
+      const { kinds, files } = repoFiles(entries);
+      // Proxmox-Skripte im Ordner proxmox/ oder ct/ (für den Installationsbefehl)
+      let scripts = entries.filter((e) => e.type === "file" && /^(pve|proxmox).*\.sh$/i.test(e.name)).map((e) => e.path);
+      const dir = entries.find((e) => e.type === "dir" && /^(proxmox|ct)$/i.test(e.name));
+      if (dir && !scripts.length) {
+        const sub = await github(`/repos/${r.full_name}/contents/${encodeURIComponent(dir.name)}?ref=${encodeURIComponent(branch)}`);
+        scripts = (Array.isArray(sub?.body) ? sub.body : []).filter((e) => e.type === "file" && /\.sh$/.test(e.name)).map((e) => e.path);
+      }
+      const parts = readmeParts(readme?.body || "");
+      r.details = { v: GH_PARSE_VERSION, pushedAt: r.pushed_at, hasReadme: !!readme, ...parts, kinds, files, scripts };
+      state.github.repos[r.full_name] = r.details;
+    } catch (e) {
+      if (e.status === 401) throw e;
+      r.details = cache || null;
+      skipped++;
+      log(`  ! ${e.message}`);
+    }
+  }
+  for (const k of Object.keys(state.github.repos)) if (!seen.has(k.toLowerCase())) delete state.github.repos[k];
+  return { login, repos, skipped };
+}
+
 // --- Zustand ---------------------------------------------------------------------------
 function loadState() {
   try { return JSON.parse(fs.readFileSync(STATE_FILE, "utf8")); } catch { return { collections: {}, docs: {} }; }
@@ -226,7 +332,8 @@ async function ensureDoc(state, key, title, collectionId, { parentDocumentId, te
       const info = await outline("documents.info", { id: known.id });
       const d = info?.data;
       if (d && !d.deletedAt) {
-        if (d.archivedAt) { await outline("documents.restore", { id: d.id }); say(`  ↺ „${title}“ wiederhergestellt`); }
+        if (d.archivedAt) { await outline("documents.restore", { id: d.id }); say(`  ↺ „${title}“ wiederhergestellt`); known.hash = null; }
+        delete known.archived;
         if (parentDocumentId && d.parentDocumentId !== parentDocumentId) {
           await outline("documents.move", { id: d.id, collectionId, parentDocumentId });
         }
@@ -293,6 +400,7 @@ async function ensureStart(state) {
   const links = {
     anleitung: url("start:anleitung", "/home"), spickzettel: url("start:spickzettel", "/home"),
     proxmox: url("pve:overview", "/settings/brainbox-proxmox"), netbird: url("nb:overview", "/settings/brainbox-netbird"),
+    github: url("gh:overview", "/settings/brainbox-github"),
     bereiche: url("area:overview", "/settings/brainbox"), regeln: url("area:rules", "/settings/brainbox"),
   };
   for (const [key, title, text] of pages) {
@@ -300,13 +408,20 @@ async function ensureStart(state) {
   }
 }
 
+// Verschwundenes kommt ins Archiv. Der Eintrag bleibt gemerkt: Taucht es wieder auf (VM zurück,
+// Repo wieder im Filter), holt ensureDoc dieselbe Seite samt Notizen zurück statt eine neue anzulegen.
 async function archiveMissing(state, prefix) {
   for (const [key, doc] of Object.entries(state.docs)) {
-    if (!key.startsWith(prefix) || doc.seen) continue;
-    try { await outline("documents.archive", { id: doc.id }); say(`  − archiviert: ${doc.title || key}`); state.stats.archived++; } catch (e) {
+    if (!key.startsWith(prefix) || doc.seen || doc.archived) continue;
+    try {
+      await outline("documents.archive", { id: doc.id });
+      say(`  − archiviert: ${doc.title || key}`);
+      state.stats.archived++;
+      doc.archived = true;
+    } catch (e) {
       if (![400, 403, 404].includes(e.status)) throw e;
+      delete state.docs[key]; // Seite gibt es nicht mehr
     }
-    delete state.docs[key];
   }
 }
 
@@ -471,23 +586,50 @@ Mit \`/\` legst du Unterbereiche an, z. B. \`Minecraft-Server/Survival\`. Jeder 
 Eine VM gehört zum Bereich ihrer Domain, ein NetBird-Gerät zum Bereich seiner VM – außer eine eigene Regel passt vorher.
 `;
 
+// Zweite Tabelle der Zuordnungsregeln: woher VMs und Container stammen
+const ORIGIN_SECTION = `## Herkunft
+
+Woher eine VM oder ein Container stammt, steht auf seiner Seite und in der Proxmox-Übersicht. Vieles erkennt Brainbox selbst: Skripte von community-scripts (am Tag „community-script“ oder an der Beschreibung), GitHub-Links in der Proxmox-Beschreibung und VMs, die so heißen wie eines deiner Repos. Hier legst du es fest oder korrigierst es – die erste passende Zeile gewinnt:
+
+| Muster | Herkunft |
+|---|---|
+| name:beispiel-* | besitzer/repo |
+
+- \`name:mc-*\` – VMs und Container, deren Name mit „mc-“ beginnt (ohne \`name:\` geht es auch)
+- \`tag:homelab\` – VMs und Container mit diesem Proxmox-Tag
+- Als Herkunft: \`besitzer/repo\` für ein GitHub-Repo, \`community-scripts\` oder \`community-scripts: Outline\`, eine Adresse oder freier Text wie „selbst gebaut“
+- Für einen einzelnen Gast geht auch eine Zeile \`repo: besitzer/repo\` in seiner Proxmox-Beschreibung
+`;
+
 const unmd = (s) => String(s || "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/\\(.)/g, "$1").replace(/[`*]{2}/g, "").replace(/`/g, "").trim();
 
-function parseRules(text) {
+// Tabellen der Zuordnungsregeln: „Muster | Bereich“ (Bereiche) und „Muster | Herkunft“ (woher ein Gast stammt).
+// Zeilen gehören zur Tabelle, deren Kopf zuletzt kam; ohne Kopf zählen sie als Bereiche (ältere Seiten).
+function parseRuleTables(text) {
   const rules = [];
+  const origins = [];
+  let mode = "area";
   for (const line of String(text || "").split("\n")) {
     const m = line.match(/^\s*\|([^|]*)\|([^|]*)\|\s*$/);
     if (!m) continue;
     let pat = unmd(m[1]);
+    if (/^muster$/i.test(pat)) { mode = /herkunft|quelle/i.test(unmd(m[2])) ? "origin" : "area"; continue; }
+    if (mode === "origin") {
+      const value = unmd(m[2]);
+      if (!pat || !value || /^[-:\s]+$/.test(pat) || /^besitzer\/repo$/i.test(value)) continue;
+      const r = originRule(pat, value);
+      if (r) origins.push(r);
+      continue;
+    }
     const area = unmd(m[2]).split("/").map((x) => x.trim()).filter(Boolean).join("/");
-    if (!pat || !area || /^[-:\s]+$/.test(pat) || /^muster$/i.test(pat)) continue;
+    if (!pat || !area || /^[-:\s]+$/.test(pat)) continue;
     let type = "domain";
     const t = pat.match(/^(name|tag|gruppe|group)\s*:\s*(.+)$/i);
     if (t) { type = t[1].toLowerCase() === "group" ? "gruppe" : t[1].toLowerCase(); pat = t[2].trim(); }
     const re = new RegExp(`^${pat.split("*").map((x) => x.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`, "i");
     rules.push({ type, pat, re, apex: type === "domain" && pat.startsWith("*.") ? pat.slice(2).toLowerCase() : null, area });
   }
-  return rules;
+  return { rules, origins };
 }
 
 function classify(rules, guests, nb, peerOf, domainsOf, peerDomains = new Map()) {
@@ -558,6 +700,13 @@ async function main() {
     say(`ok NetBird · ${peers?.length ?? 0} Geräte sichtbar`);
     return;
   }
+  if (TEST === "github") {
+    if (!cfg.GITHUB_TOKEN && !GH_OWNERS.length) throw new Error("GitHub ist nicht eingerichtet (Token oder Konto fehlt)");
+    const { login, repos } = await githubList();
+    const who = login ? `angemeldet als ${login}` : `öffentliche Repos von ${GH_OWNERS.join(", ")}`;
+    say(`ok GitHub · ${who} · ${repos.length} Repos sichtbar${repos.some((r) => r.private) ? ` (davon ${repos.filter((r) => r.private).length} privat)` : ""}`);
+    return;
+  }
   if (TEST === "wiki") {
     const me = await outline("auth.info", {});
     say(`ok Wiki · angemeldet als ${me?.data?.user?.name}`);
@@ -566,20 +715,21 @@ async function main() {
 
   const usePve = SERVERS.length > 0;
   const useNb = !!(NB_URL && cfg.NETBIRD_TOKEN);
-  if (!cfg.OUTLINE_API_KEY) { log("Noch nicht eingerichtet: brainbox-connect proxmox bzw. brainbox-connect netbird"); return; }
+  const useGh = !!(cfg.GITHUB_TOKEN || GH_OWNERS.length);
+  if (!cfg.OUTLINE_API_KEY) { log("Noch nicht eingerichtet: brainbox-connect proxmox, netbird oder github"); return; }
   const state = loadState();
   state.collections ||= {};
   state.docs ||= {};
   state.stats = { created: 0, updated: 0, archived: 0 };
-  if (!usePve && !useNb) {
+  if (!usePve && !useNb && !useGh) {
     // Noch nichts verbunden: nur Anleitung und Spickzettel pflegen
     await ensureStart(state);
     for (const d of Object.values(state.docs)) delete d.seen;
     delete state.stats;
-    state.summary = { at: new Date().toISOString(), proxmox: null, netbird: null, areas: [], loose: 0 };
+    state.summary = { at: new Date().toISOString(), proxmox: null, netbird: null, github: null, areas: [], loose: 0 };
     state.lastRun = new Date().toISOString();
     saveState(state);
-    log("Weder Proxmox noch NetBird verbunden – Anleitung ist aktuell.");
+    log("Weder Proxmox noch NetBird oder GitHub verbunden – Anleitung ist aktuell.");
     return;
   }
   for (const d of Object.values(state.docs)) d.seen = false;
@@ -633,14 +783,60 @@ async function main() {
   }
   const guestOfPeer = new Map([...peerOf.entries()].map(([vmid, p]) => [p.id, guests.find((g) => g.uid === vmid)]));
 
+  // GitHub: Repos holen – klappt es nicht, bleiben die Einträge stehen
+  let gh = null;
+  let colGh;
+  if (useGh) {
+    try { gh = { ok: true, error: "", ...(await githubData(state)) }; } catch (e) {
+      gh = { ok: false, error: e.message, login: null, repos: [], skipped: 0 };
+      say(`  ! ${e.message}`);
+      for (const [k, d] of Object.entries(state.docs)) if (k.startsWith("gh:") || k.startsWith("ghowner:")) d.seen = true;
+    }
+    colGh = await ensureCollection(state, "github", { name: "GitHub", description: "Deine Repos: was drin ist, wie man es installiert und wo es läuft – automatisch aus GitHub. Eigene Notizen unter „Notizen“ bleiben erhalten.", color: "#6E5494", icon: "github" });
+    // Neue Seiten landen oben – deshalb rückwärts anlegen: Übersicht zuletzt (steht dann oben),
+    // dein eigenes Konto vor den anderen, je Konto die zuletzt geänderten Repos oben
+    const logins = [...new Set(gh.repos.map((r) => r.owner?.login).filter(Boolean))]
+      .sort((a, b) => (a === gh.login ? -1 : b === gh.login ? 1 : a.localeCompare(b, "de")));
+    for (const login of [...logins].reverse()) {
+      const odoc = await ensureDoc(state, `ghowner:${login}`, `${login} (GitHub-Konto)`, colGh);
+      for (const r of gh.repos.filter((x) => x.owner?.login === login).reverse()) await ensureDoc(state, `gh:${r.full_name}`, r.name, colGh, { parentDocumentId: odoc.id });
+    }
+    await ensureDoc(state, "gh:overview", "GitHub – Übersicht", colGh);
+  }
+  const repoByFull = new Map((gh?.repos || []).map((r) => [r.full_name.toLowerCase(), r]));
+
   const colAreas = await ensureCollection(state, "areas", { name: "Bereiche", description: "Alles nach Bereichen sortiert – Regeln in „Zuordnungsregeln“, z. B. *.morninghosting.de → Minecraft-Server.", color: "#2F7A5B", icon: "shapes" });
-  const rulesDoc = await ensureDoc(state, "area:rules", "Zuordnungsregeln", colAreas, { text: RULES_DEFAULT });
+  const rulesDoc = await ensureDoc(state, "area:rules", "Zuordnungsregeln", colAreas, { text: `${RULES_DEFAULT}\n${ORIGIN_SECTION}` });
   rulesDoc.seen = true;
   rulesDoc.title = "Zuordnungsregeln";
   rulesDoc.hash = "regeln-gehoeren-dir";
-  const rulesText = (await outline("documents.info", { id: rulesDoc.id }))?.data?.text || "";
-  const rules = parseRules(rulesText);
+  let rulesText = (await outline("documents.info", { id: rulesDoc.id }))?.data?.text || "";
+  // Ältere Regel-Seiten bekommen einmal den Abschnitt „Herkunft“ dazu (die Seite gehört sonst dir)
+  if (!/\|\s*Muster\s*\|\s*(Herkunft|Quelle)\s*\|/i.test(rulesText) && !state.originSectionAdded) {
+    rulesText = `${rulesText.trimEnd()}\n\n${ORIGIN_SECTION}`;
+    await outline("documents.update", { id: rulesDoc.id, text: rulesText, publish: true });
+    log("  ~ Zuordnungsregeln: Abschnitt „Herkunft“ ergänzt");
+  }
+  state.originSectionAdded = true;
+  const { rules, origins: originRules } = parseRuleTables(rulesText);
   const cls = classify(rules, guests, nb, peerOf, domainsOf, peerDomains);
+  // Herkunft jeder VM und jedes Containers
+  const originOfGuest = new Map(guests.map((g) => [g.uid, originOf(g, originRules, gh?.repos || [])]));
+  const originLabel = (o, short = false) => {
+    if (!o) return short ? "–" : `unbekannt – in den [Zuordnungsregeln](${rulesDoc.url}) unter „Herkunft“ festlegen`;
+    let main;
+    if (o.kind === "repo") {
+      const r = repoByFull.get(o.full.toLowerCase());
+      main = r ? link(state.docs[`gh:${r.full_name}`], r.full_name) : `[${esc(o.full)}](https://github.com/${o.full})`;
+      if (!short && r) main += ` · [auf GitHub](${r.html_url})`;
+    } else if (o.kind === "community") {
+      const slug = communitySlug(o.app);
+      main = `[community-scripts${o.app ? ` · ${esc(o.app)}` : ""}](https://community-scripts.org/scripts${slug ? `/${slug}` : ""})`;
+    } else {
+      main = /^https?:\/\/\S+$/.test(o.text) ? `[${esc(o.text.replace(/^https?:\/\//, ""))}](${o.text})` : esc(o.text).replace(/https?:\/\/[^\s)|]+/g, (u) => `[${u.replace(/^https?:\/\//, "")}](${u})`);
+    }
+    return short ? main : `${main} · _${esc(o.via)}_`;
+  };
   // Domain als Link (Web) oder mit Port (TCP/UDP/TLS über den Reverse-Proxy)
   const domInfo = new Map(nb.domains.map((d) => [d.address, d]));
   const domLink = (addr) => {
@@ -664,19 +860,24 @@ async function main() {
         ["ID", g.vmid], ["Server", link(state.docs[`pvesrv:${g.server}`], g.server)], ["Typ", g.type === "lxc" ? "LXC-Container" : "VM"], ["Node", g.node], ["Status", g.template ? "📄 Vorlage" : statusDe(g.status)],
         ["CPU", g.cpus ? `${g.cpus} Kerne` : "–"], ["RAM", gb(g.mem)], ["Disk", gb(g.disk)], ["Betriebssystem", g.os || "–"],
         ["IP-Adressen", g.ips.join(", ") || "–"], ["Tags", g.tags.join(", ") || "–"],
+        ["Herkunft", originLabel(originOfGuest.get(g.uid))],
         ["NetBird", p ? `${link(state.docs[`nb:${p.id}`], p.dns_label || p.name)} · ${p.ip} · ${p.connected ? "🟢 online" : "⚪ offline"}` : "–"],
         ["Domains", doms.map(domLink).join(", ") || "–"],
         ["Bereich", areaLink(cls.guestArea.get(g.uid))],
         ["Proxmox", `[In Proxmox öffnen](${pveLink(g)})`],
       ];
-      const table = ["| Eigenschaft | Wert |", "|---|---|", ...rows.map(([k, v]) => `| **${k}** | ${["Proxmox", "Domains", "NetBird", "Bereich", "Server"].includes(k) ? v : esc(v)} |`)].join("\n");
-      const notes = g.notes ? `\n\n### Beschreibung aus Proxmox\n\n${g.notes.replace(/\r/g, "").split(/\n+/).join("\n\n")}` : "";
+      const table = ["| Eigenschaft | Wert |", "|---|---|", ...rows.map(([k, v]) => `| **${k}** | ${["Proxmox", "Domains", "NetBird", "Bereich", "Server", "Herkunft"].includes(k) ? v : esc(v)} |`)].join("\n");
+      // Beschreibung aus Proxmox: HTML zu Text; das Banner von community-scripts steckt schon in „Herkunft“
+      const html = /<[a-z][^>]*>/i.test(g.notes);
+      const plain = html ? stripHtml(g.notes.replace(/<\/(p|div|h\d|li)>/gi, "\n")).split("\n").map((l) => l.replace(/\s+/g, " ").trim()).filter(Boolean).join("\n") : g.notes.replace(/\r/g, "");
+      const showNotes = plain && !(html && originOfGuest.get(g.uid)?.kind === "community");
+      const notes = showNotes ? `\n\n### Beschreibung aus Proxmox\n\n${plain.split(/\n+/).join("\n\n")}` : "";
       await writeDoc(state, `pve:${g.uid}`, `${g.name} (${g.vmid})`, `${table}${notes}`);
     }
-    const header = "| Server | ID | Name | Status | IP | NetBird | Domains | Bereich |\n|---|---|---|---|---|---|---|---|";
+    const header = "| Server | ID | Name | Status | IP | NetBird | Domains | Bereich | Herkunft |\n|---|---|---|---|---|---|---|---|---|";
     const row = (g, withServer = true) => {
       const p = peerOf.get(g.uid);
-      return `|${withServer ? ` ${link(state.docs[`pvesrv:${g.server}`], g.server)} |` : ""} ${g.vmid} | ${link(state.docs[`pve:${g.uid}`], g.name)} | ${g.template ? "📄 Vorlage" : statusDe(g.status)} | ${esc(g.ips[0] || "–")} | ${p ? (p.connected ? "🟢 " : "⚪ ") + esc(p.dns_label || p.name) : "–"} | ${esc([...(domainsOf.get(g.uid) || [])].join(", ") || "–")} | ${areaLink(cls.guestArea.get(g.uid))} |`;
+      return `|${withServer ? ` ${link(state.docs[`pvesrv:${g.server}`], g.server)} |` : ""} ${g.vmid} | ${link(state.docs[`pve:${g.uid}`], g.name)} | ${g.template ? "📄 Vorlage" : statusDe(g.status)} | ${esc(g.ips[0] || "–")} | ${p ? (p.connected ? "🟢 " : "⚪ ") + esc(p.dns_label || p.name) : "–"} | ${esc([...(domainsOf.get(g.uid) || [])].join(", ") || "–")} | ${areaLink(cls.guestArea.get(g.uid))} | ${originLabel(originOfGuest.get(g.uid), true)} |`;
     };
     const pct = (a, b) => (b ? `${Math.round((a / b) * 100)} %` : "–");
     for (const info of servers) {
@@ -688,7 +889,7 @@ async function main() {
         ? `\n\n### Nodes\n\n| Node | Status | CPU | RAM | Läuft seit |\n|---|---|---|---|---|\n${info.nodes.map((n) => `| ${esc(n.node)} | ${n.status === "online" ? "🟢 online" : "⚪ " + esc(n.status || "offline")} | ${pct((n.cpu || 0) * (n.maxcpu || 0), n.maxcpu)} von ${n.maxcpu || "–"} Kernen | ${gb(n.mem)} von ${gb(n.maxmem)} | ${uptime(n.uptime)} |`).join("\n")}`
         : "";
       const list = info.guests.length
-        ? `\n\n### VMs und Container\n\n| ID | Name | Status | IP | NetBird | Domains | Bereich |\n|---|---|---|---|---|---|---|\n${info.guests.map((g) => row(g, false)).join("\n")}`
+        ? `\n\n### VMs und Container\n\n| ID | Name | Status | IP | NetBird | Domains | Bereich | Herkunft |\n|---|---|---|---|---|---|---|---|\n${info.guests.map((g) => row(g, false)).join("\n")}`
         : "";
       const addr = info.srv.url ? `| **Adresse** | [${esc(info.srv.url)}](${info.srv.url}) |` : "| **Adresse** | – |";
       const access = info.srv.mode === "agent"
@@ -744,6 +945,56 @@ async function main() {
     const domRows = nb.domains.map((d) => `| ${domLink(d.address)} | ${domSource(d)} | ${domTarget(d)} | ${domStatus(d)} | ${esc(d.protection || "–")} | ${domOwners(d)} | ${areaLink(cls.domainArea.get(d.address))} |`);
     await writeDoc(state, "nb:domains", "Domains",
       `Alle Domains aus NetBird und wohin sie zeigen – vom **Reverse-Proxy** (im NetBird-Dashboard unter Reverse Proxy → Services) und aus den **Netzwerken**. Zugeordnet wird über das Ziel des Dienstes (NetBird-Gerät oder IP der VM), sonst über den Namen (z. B. **brainbox**.morncloud.de → Gast „brainbox“) oder von Hand mit einer Zeile \`domain: name.example.de\` in den Proxmox-Notizen des Gasts.${proxyNote}\n\n| Domain | Quelle | Ziel | Status | Schutz | Gehört zu | Bereich |\n|---|---|---|---|---|---|---|\n${domRows.join("\n") || "| – | – | – | – | – | – | – |"}`);
+  }
+
+  // GitHub: je Repo eine Seite (was drin ist, installieren, läuft auf), je Konto eine Liste, dazu die Übersicht
+  if (useGh) {
+    const TZ = process.env.TZ || "Europe/Berlin";
+    const day = (iso) => (iso ? new Date(iso).toLocaleDateString("de-DE", { timeZone: TZ, dateStyle: "medium" }) : "–");
+    const runsOn = (r) => guests.filter((g) => { const o = originOfGuest.get(g.uid); return o?.kind === "repo" && o.full.toLowerCase() === r.full_name.toLowerCase(); });
+    const runsLinks = (r) => runsOn(r).map((g) => link(state.docs[`pve:${g.uid}`], `${g.name} (${g.vmid})`)).join(", ") || "–";
+    const kinds = (r) => esc((r.details?.kinds || []).join(", ") || r.language || "–");
+    // „## Notizen“ in einem Code-Beispiel aus dem README darf den eigenen Teil der Seite nicht verschieben
+    const safe = (t) => String(t || "").replace(/^(#{1,3}\s*Notizen\s*)$/gim, " $1");
+    for (const r of gh.repos) {
+      const d = r.details;
+      const rows = [
+        ["Repo", `[${esc(r.full_name)}](${r.html_url})`],
+        ["Sichtbarkeit", r.private ? "🔒 privat" : "🌐 öffentlich"],
+        ...(r.archived ? [["Status", "📦 archiviert"]] : []),
+        ...(r.fork ? [["Fork", "ja – Kopie eines anderen Repos"]] : []),
+        ["Art", esc((d?.kinds || []).join(", ") || "–")],
+        ["Sprache", esc(r.language || "–")],
+        ["Themen", esc((r.topics || []).join(", ") || "–")],
+        ["Zuletzt geändert", day(r.pushed_at)],
+        ["Branch", esc(r.default_branch || "–")],
+        ...(r.homepage ? [["Webseite", `[${esc(r.homepage.replace(/^https?:\/\//, ""))}](${r.homepage})`]] : []),
+        ["Läuft auf", runsLinks(r)],
+      ];
+      const table = ["| Eigenschaft | Wert |", "|---|---|", ...rows.map(([k, v]) => `| **${k}** | ${v} |`)].join("\n");
+      const desc = r.description ? `> ${esc(r.description)}\n\n` : "";
+      const what = !d ? "_Kommt beim nächsten Abgleich – GitHub hat gerade keine Anfragen mehr frei._"
+        : d.summary || (d.hasReadme ? "_Das README beschreibt das Projekt nicht in einem eigenen Absatz – siehe [README](" + r.html_url + "#readme)._" : "_Im Repo gibt es noch kein README._");
+      const files = d?.files?.length ? `\n\n**Dateien:** ${d.files.slice(0, 14).map((x) => `\`${x.replace(/`/g, "")}\``).join(" · ")}${d.files.length > 14 ? " · …" : ""}` : "";
+      const install = !d ? "–" : d.install
+        ? `${d.install}\n\n_Aus dem README, Abschnitt „${esc(d.installHeading)}“._`
+        : `${fallbackInstall(r, d.files || [], d.scripts || [])}\n\n_Im README steht nichts zum Installieren – Vorschlag von Brainbox nach den Dateien im Repo._`;
+      await writeDoc(state, `gh:${r.full_name}`, r.name, safe(`${desc}${table}\n\n### Was drin ist\n\n${what}${files}\n\n### Installieren\n\n${install}\n\n[README auf GitHub lesen](${r.html_url}#readme)`));
+    }
+    const repoRow = (r, withOwner) => `| ${link(state.docs[`gh:${r.full_name}`], r.name)}${r.private ? " 🔒" : ""} |${withOwner ? ` ${link(state.docs[`ghowner:${r.owner?.login}`], r.owner?.login || "–")} |` : ""} ${esc(r.description || "–")} | ${kinds(r)} | ${day(r.pushed_at)} | ${runsLinks(r)} |`;
+    for (const login of [...new Set(gh.repos.map((r) => r.owner?.login).filter(Boolean))]) {
+      const mine = gh.repos.filter((r) => r.owner?.login === login);
+      await writeDoc(state, `ghowner:${login}`, `${login} (GitHub-Konto)`,
+        `**${mine.length}** Repos von [${esc(login)}](https://github.com/${login}).\n\n| Repo | Beschreibung | Art | Zuletzt geändert | Läuft auf |\n|---|---|---|---|---|\n${mine.map((r) => repoRow(r, false)).join("\n")}`);
+    }
+    const ghNote = !gh.ok
+      ? `🔴 **GitHub nicht erreichbar** – ${esc(gh.error)}\n\nDie Einträge bleiben stehen. Zugang prüfen unter [Einstellungen → Brainbox → GitHub](/settings/brainbox-github).\n\n`
+      : gh.skipped ? `ℹ️ Bei **${gh.skipped}** Repos kommen README und Dateien beim nächsten Abgleich – GitHub erlaubt ohne Token nur 60 Anfragen je Stunde.\n\n` : "";
+    const access = gh.login ? `verbunden als **${esc(gh.login)}** (Token, nur lesen)` : `öffentliche Repos von ${GH_OWNERS.map((o) => `**${esc(o)}**`).join(", ")}`;
+    const originRows = guests.map((g) => { const o = originOfGuest.get(g.uid); return `| ${link(state.docs[`pve:${g.uid}`], `${g.name} (${g.vmid})`)} | ${link(state.docs[`pvesrv:${g.server}`], g.server)} | ${originLabel(o, true)} | ${o ? esc(o.via) : "–"} |`; });
+    await writeDoc(state, "gh:overview", "GitHub – Übersicht",
+      `${ghNote}**${gh.repos.length}** Repos · ${access}. Was in jedem Repo steckt und wie man es installiert, steht auf seiner Seite. Zugang ändern unter [Einstellungen → Brainbox → GitHub](/settings/brainbox-github).\n\n| Repo | Konto | Beschreibung | Art | Zuletzt geändert | Läuft auf |\n|---|---|---|---|---|---|\n${gh.repos.map((r) => repoRow(r, true)).join("\n") || "| – | – | – | – | – | – |"}` +
+      (guests.length ? `\n\n### Woher deine VMs und Container stammen\n\nErkannt an community-scripts, GitHub-Links in der Proxmox-Beschreibung und gleichen Namen – oder festgelegt in den [Zuordnungsregeln](${rulesDoc.url}) unter „Herkunft“.\n\n| VM / Container | Server | Herkunft | erkannt über |\n|---|---|---|---|\n${originRows.join("\n")}` : ""));
   }
 
   // Bereiche: je Bereich ein Eintrag mit Domains, VMs/Containern und Geräten
@@ -802,6 +1053,8 @@ async function main() {
       guests: guests.length,
       running: guests.filter((g) => g.status === "running").length,
     } : null,
+    github: useGh ? { ok: gh.ok, error: gh.error || null, login: gh.login || null, repos: gh.repos.length, private: gh.repos.filter((r) => r.private).length, owners: [...new Set(gh.repos.map((r) => r.owner?.login).filter(Boolean))], url: state.docs["gh:overview"]?.url || null } : null,
+    origins: usePve ? { known: guests.filter((g) => originOfGuest.get(g.uid)).length, community: guests.filter((g) => originOfGuest.get(g.uid)?.kind === "community").length, repo: guests.filter((g) => originOfGuest.get(g.uid)?.kind === "repo").length } : null,
     netbird: useNb ? { peers: nb.peers.length, online: nb.peers.filter((p) => p.connected).length, domains: nb.domains.length, proxies: nb.domains.filter((d) => d.source === "proxy").length, networks: nb.networks.length } : null,
     areas: summary.filter(({ a }) => !a.includes("/")).map(({ a, ds, gs, ps }) => ({ name: a, url: state.docs[`area:${a}`]?.url || null, domains: ds.length, guests: gs.length, peers: ps.length })),
     loose: loose.ds.length + loose.gs.length + loose.ps.length,
@@ -810,6 +1063,7 @@ async function main() {
   // 5. Verschwundene Einträge archivieren (nicht löschen)
   if (usePve) { await archiveMissing(state, "pve:"); await archiveMissing(state, "pvesrv:"); }
   if (useNb) await archiveMissing(state, "nb:");
+  if (useGh && gh.ok) { await archiveMissing(state, "gh:"); await archiveMissing(state, "ghowner:"); }
   await archiveMissing(state, "area:");
   for (const d of Object.values(state.docs)) delete d.seen;
 
@@ -820,6 +1074,7 @@ async function main() {
   const parts = [];
   if (usePve) parts.push(`Proxmox: ${servers.length} Server, ${guests.length} Gäste${servers.some((i) => !i.ok) ? ` (${servers.filter((i) => !i.ok).length} nicht erreichbar)` : ""}`);
   if (useNb) parts.push(`NetBird: ${nb.peers.length} Geräte, ${nb.domains.length} Domains (${nb.domains.filter((d) => d.source === "proxy").length} Reverse-Proxy)${nb.proxyError ? " – Reverse-Proxy nicht lesbar" : ""}`);
+  if (useGh) parts.push(gh.ok ? `GitHub: ${gh.repos.length} Repos${gh.skipped ? ` (${gh.skipped} Details später)` : ""}` : "GitHub: nicht erreichbar");
   parts.push(`Bereiche: ${cls.areas.length}`);
   const changes = `${created} neu, ${updated} geändert, ${archived} archiviert`;
   if (!QUIET || created || updated || archived) say(`Abgleich fertig · ${parts.join(" · ")} · ${changes}`);

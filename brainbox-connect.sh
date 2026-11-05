@@ -2,7 +2,7 @@
 # ------------------------------------------------------------------------------
 # Brainbox – Verbindungen (im Container: brainbox-connect)
 #
-#   brainbox-connect                  Menü: Claude, Proxmox, NetBird, Abgleich
+#   brainbox-connect                  Menü: Claude, Proxmox, NetBird, GitHub, Abgleich
 #   brainbox-connect claude [--json]  Claude über MCP verbinden (mit deiner Anmeldung): Anleitung
 #   brainbox-connect proxmox          Proxmox-Server verwalten (Menü)
 #   brainbox-connect proxmox add NAME URL TOKEN-ID SECRET [--insecure]
@@ -14,6 +14,9 @@
 #   brainbox-connect proxmox remove NAME | list | test [NAME]
 #   brainbox-connect netbird [URL TOKEN] | netbird remove
 #                                     NetBird verbinden: Geräte, Netzwerke und Domains ins Wiki
+#   brainbox-connect github [TOKEN] [--owners a,b] [--forks] [--archived] | github remove | github test
+#                                     GitHub verbinden: je Repo eine Seite (was drin ist, installieren),
+#                                     Herkunft bei jeder VM; ohne Token nur öffentliche Repos der Konten
 #   brainbox-connect sync             jetzt abgleichen (läuft sonst alle 5 Minuten)
 #   brainbox-connect status           zeigt, was verbunden ist
 #   brainbox-connect start            Anleitung im Wiki und Abgleich einrichten
@@ -499,6 +502,56 @@ cmd_netbird() {
   ok "NetBird verbunden – Geräte, Netzwerke und Domains landen automatisch im Wiki (Sammlung 'NetBird')."
 }
 
+# --- GitHub -------------------------------------------------------------------------
+# brainbox-connect github [TOKEN] [--owners a,b] [--forks|--no-forks] [--archived|--no-archived]
+#   Ohne TOKEN bleibt ein schon eingetragener Token; nur --owners ohne Token = nur öffentliche Repos.
+cmd_github() {
+  local tok="" owners="" oset="no" forks="" archived="" keep="yes" a
+  case "${1:-}" in
+  remove | entfernen | trennen)
+    conf_del GITHUB_TOKEN; conf_del GITHUB_OWNERS; conf_del GITHUB_FORKS; conf_del GITHUB_ARCHIVED
+    ok "GitHub getrennt – die Repo-Seiten bleiben im Wiki stehen."
+    return 0 ;;
+  test | pruefen)
+    run_sync --test github
+    return $? ;;
+  esac
+  if [[ $# -eq 0 ]]; then
+    command -v whiptail >/dev/null 2>&1 || fail "Beispiel: brainbox-connect github github_pat_… (Token nur lesend) oder brainbox-connect github --owners pmornhart"
+    wt --title "GITHUB" --msgbox "Token anlegen (nur lesen): github.com → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token.\n\nRepository access: All repositories\nPermissions → Repository: Contents = Read-only (Metadata kommt automatisch)\n\nOhne Token holt Brainbox nur die öffentlichen Repos der Konten, die du gleich einträgst." 16 76 || true
+    tok="$(wt --title "GITHUB" --passwordbox "Token (leer lassen = bisheriger bzw. ohne Token)" 9 76)" || return 0
+    owners="$(wt --title "GITHUB" --inputbox "Nur diese Konten/Organisationen (mit Komma; leer = alle, die der Token sieht)" 10 76 "$(conf_get GITHUB_OWNERS || true)")" || return 0
+    oset="yes"
+  else
+    while [[ $# -gt 0 ]]; do
+      a="$1"; shift
+      case "$a" in
+      --owners | --konten) owners="${1:-}"; oset="yes"; shift || true ;;
+      --forks) forks="1" ;;
+      --no-forks) forks="0" ;;
+      --archived | --archiviert) archived="1" ;;
+      --no-archived) archived="0" ;;
+      --no-token | --ohne-token) keep="no" ;;
+      -*) fail "Unbekannte Option: ${a}" ;;
+      *) tok="$a" ;;
+      esac
+    done
+  fi
+  owners="$(printf '%s' "$owners" | tr ' ;' ',,' | tr -s ',' | sed 's/^,//; s/,$//')"
+  [[ -z "$tok" || "$tok" =~ ^[A-Za-z0-9_]{20,255}$ ]] || fail "Das sieht nicht wie ein GitHub-Token aus (ghp_… oder github_pat_…)."
+  [[ -z "$owners" || "$owners" =~ ^[A-Za-z0-9-]+(,[A-Za-z0-9-]+)*$ ]] || fail "Konten bitte nur mit Komma trennen, z. B. pmornhart,Morni-Team"
+  if [[ -n "$tok" ]]; then conf_set GITHUB_TOKEN "$tok"; elif [[ "$keep" == "no" ]]; then conf_del GITHUB_TOKEN; fi
+  if [[ -n "$owners" ]]; then conf_set GITHUB_OWNERS "$owners"; elif [[ "$oset" == "yes" ]]; then conf_del GITHUB_OWNERS; fi
+  [[ -n "$forks" ]] && conf_set GITHUB_FORKS "$forks"
+  [[ -n "$archived" ]] && conf_set GITHUB_ARCHIVED "$archived"
+  [[ -n "$(conf_get GITHUB_TOKEN)" || -n "$(conf_get GITHUB_OWNERS)" ]] || fail "Token oder Konto fehlt – z. B. brainbox-connect github --owners pmornhart"
+  ensure_bot
+  run_sync --test github || fail "GitHub antwortet nicht wie erwartet – Token bzw. Kontoname prüfen."
+  enable_timer
+  run_sync
+  ok "GitHub verbunden – je Repo eine Seite in der Sammlung 'GitHub', die Herkunft steht bei jeder VM."
+}
+
 # --- Übersicht -------------------------------------------------------------------------
 status() {
   local last t
@@ -508,6 +561,9 @@ status() {
   pve_migrate
   if [[ "$(pve_count)" != "0" ]]; then echo -e "  Proxmox:    ${GN}$(pve_count) Server${CL} ($(pve_json | jq -r '[.[].name] | join(", ")'))"; else echo -e "  Proxmox:    ${YW}nicht verbunden${CL} – brainbox-connect proxmox add …"; fi
   if [[ -n "$(conf_get NETBIRD_URL)" ]]; then echo -e "  NetBird:    ${GN}verbunden${CL} ($(conf_get NETBIRD_URL))"; else echo -e "  NetBird:    ${YW}nicht verbunden${CL} – brainbox-connect netbird"; fi
+  if [[ -n "$(conf_get GITHUB_TOKEN)" || -n "$(conf_get GITHUB_OWNERS)" ]]; then
+    echo -e "  GitHub:     ${GN}verbunden${CL} ($([[ -n "$(conf_get GITHUB_TOKEN)" ]] && echo "Token, nur lesen" || echo "nur öffentliche Repos")$([[ -n "$(conf_get GITHUB_OWNERS)" ]] && echo " · $(conf_get GITHUB_OWNERS)"))"
+  else echo -e "  GitHub:     ${YW}nicht verbunden${CL} – brainbox-connect github"; fi
   last="$(jq -r '.lastRun // empty' "$STATE" 2>/dev/null || true)"
   [[ -n "$last" ]] && echo -e "  Abgleich:   zuletzt $(date -d "$last" '+%d.%m.%Y %H:%M' 2>/dev/null || echo "$last")"
   t="$(systemctl is-active brainbox-sync.timer 2>/dev/null || true)"
@@ -519,19 +575,21 @@ main_menu() {
   command -v whiptail >/dev/null 2>&1 || fail "whiptail fehlt (apt install whiptail)."
   local choice
   while :; do
-    choice="$(wt --title "VERBINDUNGEN" --cancel-button "Fertig" --menu "Was möchtest du verbinden?" 17 72 5 \
-      1 "Claude – eigenes Konto, schreibt mit ins Wiki" \
+    choice="$(wt --title "VERBINDUNGEN" --cancel-button "Fertig" --menu "Was möchtest du verbinden?" 18 72 6 \
+      1 "Claude – über MCP mit deiner Anmeldung" \
       2 "Proxmox-Server – $(pve_count) verbunden" \
       3 "NetBird – $([[ -n "$(conf_get NETBIRD_URL)" ]] && echo verbunden || echo aus)" \
-      4 "Jetzt abgleichen" \
-      5 "Übersicht anzeigen")" || break
+      4 "GitHub – $([[ -n "$(conf_get GITHUB_TOKEN)$(conf_get GITHUB_OWNERS)" ]] && echo verbunden || echo aus)" \
+      5 "Jetzt abgleichen" \
+      6 "Übersicht anzeigen")" || break
     clear
     case "$choice" in
     1) (cmd_claude) || true ;;
     2) pve_menu; continue ;;
     3) (cmd_netbird) || true ;;
-    4) (run_sync) || true ;;
-    5) status ;;
+    4) (cmd_github) || true ;;
+    5) (run_sync) || true ;;
+    6) status ;;
     esac
     read -rp "  Weiter mit Enter … " _
   done
@@ -544,9 +602,10 @@ case "${1:-}" in
 claude) shift; cmd_claude "$@" ;;
 proxmox) shift; cmd_proxmox "$@" ;;
 netbird) shift; cmd_netbird "$@" ;;
+github) shift; cmd_github "$@" ;;
 sync) shift; run_sync "$@" ;;
 start) shift; cmd_start "$@" ;;
 status) status ;;
--h | --help | help) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//' ;;
+-h | --help | help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//' ;;
 *) fail "Unbekannter Befehl: $1 (siehe brainbox-connect --help)" ;;
 esac

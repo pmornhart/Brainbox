@@ -15,6 +15,7 @@
   <a href="#%EF%B8%8F-einstellungen">Einstellungen</a> ·
   <a href="#%EF%B8%8F-proxmox-server">Proxmox</a> ·
   <a href="#-netbird">NetBird</a> ·
+  <a href="#-github">GitHub</a> ·
   <a href="#%EF%B8%8F-bereiche">Bereiche</a> ·
   <a href="#-künstliche-intelligenz">KI</a> ·
   <a href="#-anmelden">Anmelden</a> ·
@@ -37,6 +38,7 @@ Brainbox ist ein eigenständiges Wiki für dein Homelab: Editor mit Echtzeit-Bea
 | 📖 **Anleitung im Wiki** | Sammlung „Start“ mit Anleitung und Spickzettel – liegt nach der Installation bereit und wird bei Updates aufgefrischt. |
 | 🖥️ **Beliebig viele Proxmox-Server** | Jeder Server bekommt eine eigene Seite mit Nodes und Auslastung, darunter je VM und Container ein Eintrag. Neue erscheinen nach spätestens 5 Minuten. |
 | 🌐 **NetBird** | Geräte, Netzwerke und Domains – auch vom NetBird-Reverse-Proxy –, automatisch mit den passenden VMs verknüpft. |
+| 🐙 **GitHub** | Je Repo eine Seite: was drin ist und wie man es installiert. Bei jeder VM steht, woher sie stammt – community-scripts, eigenes Repo oder selbst festgelegt. |
 | 🗂️ **Bereiche** | Regeln wie `*.morninghosting.de → Minecraft-Server` sortieren Domains, VMs und Geräte, mit Unterbereichen. |
 | 🤖 **Claude packt mit an** | Über den MCP-Anschluss mit deiner Anmeldung: Claude schreibt im Wiki und bedient Brainbox – Proxmox-Server hinzufügen und umbenennen, NetBird, Abgleich, Update. |
 | 📚 **Ein Container = ein Wiki** | Wiki und Admin legt die Installation an, am Ende gibt es einen Login-Link. Weiteres Wiki: Befehl nochmal, andere Domain. |
@@ -103,7 +105,7 @@ Oben in der Seitenleiste unter **Einstellungen**. Statt einer langen Liste gibt 
 
 | Gruppe | Darin |
 |---|---|
-| **Brainbox** (nur Admins) | Übersicht · Proxmox-Server · NetBird · Künstliche Intelligenz · Anmeldung · Version & Update |
+| **Brainbox** (nur Admins) | Übersicht · Proxmox-Server · NetBird · GitHub · Künstliche Intelligenz · Anmeldung · Version & Update |
 | **Wiki** | Allgemein · Mitglieder · Sicherheit · Vorlagen · Export |
 | **Konto** | Profil · Darstellung · Benachrichtigungen · Passkeys – auch mit einem Klick auf deinen Namen unten links |
 
@@ -111,7 +113,7 @@ Alle Seiten sehen gleich aus: Karten mit kurzer Erklärung, Schalter mit einem S
 
 <p align="center"><img src="docs/screenshots/einstellungen-mitglieder.png" alt="Einstellungen → Wiki → Mitglieder: Einladen-Formular und Liste der Mitglieder mit Rollen" width="900"></p>
 
-Slack, Zapier, Webhooks, GitHub, Analytics, Gruppen, Emojis, API-Schlüssel und Integrationen sind ausgeblendet – ein Homelab-Wiki braucht sie nicht. Alles aus der Gruppe *Brainbox* geht auch im Terminal des Containers: `brainbox-connect`, `brainbox-login`, `update`.
+Slack, Zapier, Webhooks, die GitHub-Integration des Editors, Analytics, Gruppen, Emojis, API-Schlüssel und Integrationen sind ausgeblendet – ein Homelab-Wiki braucht sie nicht. Alles aus der Gruppe *Brainbox* geht auch im Terminal des Containers: `brainbox-connect`, `brainbox-login`, `update`.
 
 ## 📖 Anleitung im Wiki
 
@@ -164,6 +166,28 @@ Der kleine Brainbox-Agent liest dort alle 5 Minuten Nodes, VMs und Container (nu
 ## 🌐 NetBird
 
 Unter *Einstellungen → Brainbox → NetBird* (oder `brainbox-connect netbird`) API-Adresse und Access Token eintragen. Danach stehen alle Geräte im Wiki – online/offline, NetBird-IP, DNS-Name, Gruppen – plus eine Liste aller **Domains**: vom NetBird-**Reverse-Proxy** (Reverse Proxy → Services) mit Ziel, Status und Schutz (SSO, Passwort, nur NetBird …) und aus deinen NetBird-Netzwerken. Jede Domain landet über das Ziel des Dienstes bei der richtigen VM, sonst über gleichen Namen oder gleiche IP. Für den Reverse-Proxy braucht der Token die Rolle *Admin*. Passwörter und PINs der Dienste kommen nie ins Wiki.
+
+## 🐙 GitHub
+
+Unter *Einstellungen → Brainbox → GitHub* (oder `brainbox-connect github TOKEN`) einen GitHub-Token eintragen, der **nur lesen** darf: auf GitHub *Settings → Developer settings → Personal access tokens → Fine-grained tokens*, „All repositories“, *Contents: Read-only*. Ohne Token geht es auch – dann nur mit den öffentlichen Repos der Konten, die du einträgst (`brainbox-connect github --owners pmornhart`).
+
+- **Je Repo eine Seite** in der Sammlung „GitHub“, sortiert nach Konto: Beschreibung, Sichtbarkeit, Art (Proxmox-Skript, Docker, Node.js …), **Was drin ist** und **Installieren** – aus dem README, sonst ein Vorschlag nach den Dateien im Repo. Darunter **Läuft auf**: welche VMs und Container aus dem Repo stammen.
+- **Herkunft bei jeder VM:** Auf jeder VM-Seite und in der Proxmox-Übersicht steht, woher sie stammt:
+  - **community-scripts** – erkannt am Tag `community-script` oder an der Beschreibung, die die Skripte in Proxmox hinterlassen, mit Link zum Skript
+  - **eigenes Repo** – über einen GitHub-Link in der Proxmox-Beschreibung, eine Zeile `repo: besitzer/repo` dort oder weil die VM so heißt wie das Repo
+  - **selbst festgelegt** – in den Zuordnungsregeln in der Tabelle *Muster | Herkunft*, z. B. `name:mc-*` → `MoinMornhart/minecraft-battleworld`
+- **Sparsam:** README und Dateien liest Brainbox nur neu, wenn sich ein Repo geändert hat. Forks und archivierte Repos bleiben draußen, wenn du sie nicht dazunimmst.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/einstellungen-github.png" alt="Einstellungen → GitHub: verbunden mit Token nur zum Lesen, Formular für Token, Konten, Forks und archivierte Repos"></td>
+    <td width="50%"><img src="docs/screenshots/github-repo.png" alt="Wiki-Seite eines Repos: Sichtbarkeit, Art, Sprache, läuft auf brainbox (101), darunter „Was drin ist“"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Einstellungen → GitHub</sub></td>
+    <td align="center"><sub>Je Repo eine Seite: was drin ist, installieren, wo es läuft</sub></td>
+  </tr>
+</table>
 
 ## 🗂️ Bereiche
 
@@ -260,15 +284,17 @@ flowchart LR
   P1["Proxmox zuhause"] -- "nur lesen" --> S
   P2["Proxmox hetzner"] -- "nur lesen" --> S
   NB["NetBird<br/>Geräte, Domains"] --> S
+  GH["GitHub<br/>Repos, README"] -- "nur lesen" --> S
 ```
 
 ## 🧰 Befehle im Container
 
 | Befehl | Wofür |
 |---|---|
-| `brainbox-connect` | Menü: Claude, Proxmox-Server, NetBird, Abgleich |
+| `brainbox-connect` | Menü: Claude, Proxmox-Server, NetBird, GitHub, Abgleich |
 | `brainbox-connect proxmox add NAME URL TOKEN-ID SECRET [--insecure]` | weiteren Proxmox-Server verbinden |
 | `brainbox-connect proxmox list` / `remove NAME` / `test` | Server anzeigen, entfernen, prüfen |
+| `brainbox-connect github TOKEN` / `--owners a,b` / `remove` | GitHub verbinden (Token nur lesen) bzw. nur öffentliche Repos; trennen |
 | `brainbox-connect sync` | sofort abgleichen |
 | `brainbox-connect start` | Anleitung im Wiki und Abgleich einrichten (machen Installation und Update von selbst) |
 | `brainbox-login` | Anmeldewege einrichten |
@@ -300,6 +326,7 @@ flowchart LR
 - **Brainbox-Einstellungen nur für Admins:** Die Zentrale prüft die Anmeldung im Wiki und nimmt Änderungen nur von der eigenen Seite an.
 - **Proxmox nur lesen:** Zugang `brainbox@pve` mit Rolle PVEAuditor, eigener Token je Wiki. Der Agent an anderen Standorten liest nur per `pvesh`, schickt keine Passwörter oder SSH-Schlüssel mit und hat einen eigenen Schlüssel je Server – Brainbox speichert davon nur den Hash.
 - **Claude nur mit deinen Rechten:** Claude meldet sich über den MCP-Anschluss mit deinem Konto an. Brainbox bedienen dürfen nur Admins; die Werkzeuge sprechen die Zentrale über einen internen Schlüssel an, der nur auf dem Container selbst gilt.
+- **GitHub nur lesen:** Brainbox braucht nur *Contents: Read-only*. Der Token liegt in `/etc/brainbox/connect.env`, nie im Wiki.
 - **Geheimnisse bleiben im Container:** Tokens und Schlüssel liegen nur für root lesbar in `/etc/brainbox/`, nie im Wiki.
 - **Login-Links** gelten einmal und 60 Minuten.
 

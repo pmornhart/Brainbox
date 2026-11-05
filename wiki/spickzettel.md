@@ -41,6 +41,8 @@ Auf dem Mac statt `Strg` die Taste `⌘`.
 |---|---|
 | einen Proxmox-Server verbinden | [Einstellungen → Brainbox → Proxmox-Server](/settings/brainbox-proxmox) |
 | NetBird verbinden | [Einstellungen → Brainbox → NetBird](/settings/brainbox-netbird) |
+| GitHub verbinden | [Einstellungen → Brainbox → GitHub](/settings/brainbox-github) |
+| festlegen, woher eine VM stammt | [Zuordnungsregeln]({{regeln}}) → Tabelle „Herkunft“ |
 | Claude verbinden | [Einstellungen → Brainbox → Künstliche Intelligenz](/settings/brainbox-claude) |
 | einen Proxmox an einem anderen Standort verbinden | [Proxmox-Server](/settings/brainbox-proxmox) → „Server an einem anderen Standort“ |
 | einen Server umbenennen | [Proxmox-Server](/settings/brainbox-proxmox) → „Umbenennen“ |
@@ -59,7 +61,8 @@ Auf dem Mac statt `Strg` die Taste `⌘`.
 | `update --check` | nur nachsehen, ob es ein Update gibt |
 | `brainbox-login link` | einmaliger Login-Link, 60 Minuten gültig |
 | `brainbox-login` | Anmeldewege einrichten |
-| `brainbox-connect` | Proxmox, NetBird und Claude verbinden |
+| `brainbox-connect` | Proxmox, NetBird, GitHub und Claude verbinden |
+| `brainbox-connect github TOKEN` | GitHub verbinden (Token nur lesen; `--owners name` für nur öffentliche Repos) |
 | `brainbox-connect proxmox agent NAME` | Server an einem anderen Standort: Befehl für dort |
 | `brainbox-connect proxmox rename ALT NEU` | Server umbenennen |
 | `brainbox-connect sync` | sofort abgleichen |

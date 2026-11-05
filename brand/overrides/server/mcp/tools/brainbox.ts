@@ -29,8 +29,10 @@ Aufbau des Wikis:
 - Sammlung „Start“: Anleitung und Spickzettel. Wenn du wissen willst, wie etwas in Brainbox geht, lies zuerst die Seite „Anleitung“.
 - Sammlung „Proxmox“: je Proxmox-Server eine Seite „<Name> (Proxmox-Server)“, darunter je VM und Container eine Seite mit Status, IPs, Domains und Bereich.
 - Sammlung „NetBird“: Geräte, Netzwerke und die Seite „Domains“ (auch Domains vom NetBird-Reverse-Proxy mit Ziel, Status und Schutz).
+- Sammlung „GitHub“ (wenn verbunden): je GitHub-Konto eine Seite, darunter je Repo eine Seite mit „Was drin ist“, „Installieren“ (aus dem README) und „Läuft auf“ (welche VMs daraus stammen). Fragt jemand, was in einem Repo steckt oder wie man es installiert, lies dort zuerst nach. Bessere Erklärungen schreibst du unter „Notizen“ der Repo-Seite.
+- Jede VM und jeder Container hat eine Zeile „Herkunft“: community-scripts, ein GitHub-Repo oder was festgelegt wurde. Festlegen oder korrigieren geht in den „Zuordnungsregeln“ in der Tabelle „Muster | Herkunft“ (z. B. name:mc-* → besitzer/repo, tag:media → community-scripts) oder mit einer Zeile „repo: besitzer/repo“ in der Proxmox-Beschreibung.
 - Sammlung „Bereiche“: alles nach Themen. Die Seite „Zuordnungsregeln“ legt in einer Tabelle (Muster → Bereich) fest, was wohin gehört, z. B. *.example.de → Minecraft-Server. Die erste passende Regel gewinnt.
-- Seiten in „Proxmox“, „NetBird“ und „Bereiche“ schreibt der Abgleich alle 5 Minuten neu. Ändere dort nur den Teil unter der Überschrift „Notizen“ (außer an den Zuordnungsregeln).
+- Seiten in „Proxmox“, „NetBird“, „GitHub“ und „Bereiche“ schreibt der Abgleich alle 5 Minuten neu. Ändere dort nur den Teil unter der Überschrift „Notizen“ (außer an den Zuordnungsregeln).
 - Sammlung „Von Claude“: für Seiten, die in keine andere Sammlung passen. Suche vor dem Anlegen, ob es schon eine passende Seite gibt, und ergänze lieber diese. Lege keine neuen Sammlungen an, ohne zu fragen.
 
 Brainbox bedienen (Werkzeuge brainbox_*, nur für Admins):
@@ -40,8 +42,9 @@ Brainbox bedienen (Werkzeuge brainbox_*, nur für Admins):
   - Anderer Standort: brainbox_proxmox_add_remote erzeugt einen Befehl. Die Person führt ihn in der Shell des entfernten Proxmox-Hosts aus, danach meldet sich der Server alle 5 Minuten selbst.
 - brainbox_proxmox_rename gibt einem Server einen neuen Namen (die Wiki-Seiten werden mit umbenannt). brainbox_proxmox_remove entfernt einen Server (seine Seiten werden archiviert) – vorher nachfragen.
 - brainbox_netbird_connect verbindet NetBird (API-Adresse und Access Token eines Service Users mit Rolle Admin).
+- brainbox_github_connect verbindet GitHub: am besten mit einem Fine-grained Token nur zum Lesen (github.com → Settings → Developer settings → Personal access tokens → Fine-grained, „All repositories“, Contents: Read-only). Ohne Token gehen nur öffentliche Repos der angegebenen Konten.
 - brainbox_sync gleicht sofort ab. brainbox_update_check prüft auf eine neue Version, brainbox_update_start startet das Update (das Wiki ist dabei einige Minuten nicht erreichbar – vorher nachfragen).
-- Brainbox liest Proxmox und NetBird nur, es ändert dort nichts.
+- Brainbox liest Proxmox, NetBird und GitHub nur, es ändert dort nichts.
 Schreibe nie Passwörter, Tokens oder Schlüssel ins Wiki und wiederhole Secrets nicht unnötig.`;
 
 type ZentraleResult = { ok?: boolean; output?: string; error?: string };
@@ -177,10 +180,24 @@ const tools: ToolDef[] = [
     },
   },
   {
+    name: "brainbox_github_connect",
+    title: "GitHub verbinden",
+    description:
+      "Verbindet GitHub: je Repo eine Wiki-Seite (was drin ist, wie man es installiert, wo es läuft), dazu die Herkunft bei jeder VM. Mit Token (nur lesen) kommen alle Repos, die der Token sieht, auch private; ohne Token nur die öffentlichen Repos der angegebenen Konten. Ein leerer Token behält den bisherigen. Brainbox liest GitHub nur.",
+    write: true,
+    action: "github",
+    input: {
+      token: z.string().optional().describe("GitHub-Token (github_pat_… oder ghp_…), nur lesen; leer lassen = bisheriger bzw. ohne Token"),
+      owners: z.array(z.string()).optional().describe("Nur diese Konten/Organisationen, z. B. [\"pmornhart\", \"Morni-Team\"]; leer = alle, die der Token sieht"),
+      forks: z.boolean().optional().describe("Forks mitnehmen"),
+      archived: z.boolean().optional().describe("Archivierte Repos mitnehmen"),
+    },
+  },
+  {
     name: "brainbox_sync",
     title: "Jetzt abgleichen",
     description:
-      "Gleicht Proxmox, NetBird und Bereiche sofort mit dem Wiki ab (läuft sonst alle 5 Minuten).",
+      "Gleicht Proxmox, NetBird, GitHub und Bereiche sofort mit dem Wiki ab (läuft sonst alle 5 Minuten).",
     write: true,
     action: "sync",
     input: {},
