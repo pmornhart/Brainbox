@@ -23,8 +23,9 @@ community-scripts Outline-Skripts (https://community-scripts.org/scripts/outline
 - `brainbox-login.sh` – wird zu `/usr/bin/brainbox-login`; Adresse, E-Mail, Passkeys, Google, Microsoft, Discord, OIDC, Sprache.
   Nie `login` nennen (würde `/bin/login` verdecken). Dazu `brainbox-login workspace` (Wiki anlegen) und `brainbox-login link` (Login-Link).
 - Ein Container = ein Wiki mit eigener Domain; Wiki und Admin legt die Installation automatisch an.
-- `brainbox-connect.sh` – wird zu `/usr/bin/brainbox-connect`; Claude-Konto, Proxmox-Server (mehrere, `proxmox add|remove|list|test`), NetBird, Abgleich (`sync`), `status`.
-- `connect/sync.mjs` – Node-Skript ohne Abhängigkeiten, gleicht Proxmox/NetBird ins Wiki ab (Timer alle 5 Min.).
+- `brainbox-connect.sh` – wird zu `/usr/bin/brainbox-connect`; Proxmox-Server (mehrere, `proxmox add|agent|rename|remove|list|test`), NetBird, GitHub, Abgleich (`sync`), `status`.
+- `connect/sync.mjs` – Node-Skript ohne Abhängigkeiten, gleicht Proxmox/NetBird/GitHub ins Wiki ab (Timer alle 5 Min.).
+  `connect/github.mjs` – README-Zusammenfassung, Art des Projekts und Herkunft der Gäste (community-scripts, Repo, Regel).
   Testen mit nachgebauten APIs (Proxmox https mit selbstsigniertem Zertifikat, NetBird http), siehe STAND.md.
 - `docs/proxmox-quickstart.md` – Quick-Start im Stil von community-scripts.org.
 

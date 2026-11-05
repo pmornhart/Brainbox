@@ -4,6 +4,11 @@
 // Verfasst mit Claude 🤖
 export const PHOSPHOR_VERSION = "2.1.1";
 
+// Zusätzliche Brainbox-Symbole, die es in „outline-icons“ nicht gibt (Import aus ~/components/Icons/BrainboxIconSet)
+export const extras = {
+  GitHubIcon: "github-logo",
+};
+
 export const zuordnung = {
   AcademicCapIcon: "graduation-cap",
   AlignCenterIcon: "text-align-center",

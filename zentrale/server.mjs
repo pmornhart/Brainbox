@@ -170,7 +170,7 @@ async function status(req, me) {
   let servers = readJson(path.join(CONF_DIR, "proxmox.json"), null);
   if (!servers && conn.PVE_URL) servers = [{ name: "proxmox", url: conn.PVE_URL, tokenId: conn.PVE_TOKEN_ID, insecure: ["1", "yes"].includes(conn.PVE_INSECURE) }];
   const state = readJson(STATE_FILE, {});
-  const docs = Object.keys(state.docs || {});
+  const docs = Object.entries(state.docs || {}).filter(([, d]) => !d?.archived).map(([k]) => k);
   const url = env.URL || "";
   const host = url.replace(/^https?:\/\//, "").replace(/[:/].*$/, "");
   const claudeMail = `claude@${/^[0-9.]+$/.test(host) || !host.includes(".") ? "brainbox.local" : host}`;
@@ -195,6 +195,16 @@ async function status(req, me) {
       guests: state.summary?.proxmox?.servers?.find((y) => y.name === x.name)?.guests ?? null,
     })),
     netbird: conn.NETBIRD_URL ? { url: conn.NETBIRD_URL, wikiUrl: state.docs?.["nb:overview"]?.url || null } : null,
+    github: conn.GITHUB_TOKEN || conn.GITHUB_OWNERS ? {
+      token: !!conn.GITHUB_TOKEN,
+      owners: String(conn.GITHUB_OWNERS || "").split(",").map((x) => x.trim()).filter(Boolean),
+      forks: ["1", "yes", "true"].includes(String(conn.GITHUB_FORKS || "").toLowerCase()),
+      archived: ["1", "yes", "true"].includes(String(conn.GITHUB_ARCHIVED || "").toLowerCase()),
+      login: state.summary?.github?.login || null, repos: state.summary?.github?.repos ?? null,
+      ok: state.summary?.github?.ok ?? null, error: state.summary?.github?.error || null,
+      wikiUrl: state.docs?.["gh:overview"]?.url || null,
+    } : null,
+    origins: state.summary?.origins || null,
     claude: { account: claude, email: claudeMail, mcpUrl: `${url}/mcp`, key: !!conn.CLAUDE_API_KEY },
     sync: {
       lastRun: state.lastRun || null, timer: timer.output.trim() === "active", bot: !!conn.OUTLINE_API_KEY,
@@ -202,6 +212,7 @@ async function status(req, me) {
         guests: docs.filter((k) => /^pve:.+:\d+$/.test(k)).length,
         peers: docs.filter((k) => /^nb:/.test(k) && !["nb:overview", "nb:domains"].includes(k)).length,
         areas: areas.length,
+        repos: docs.filter((k) => /^gh:.+\/.+/.test(k)).length,
       },
       areas,
       rulesUrl: state.docs?.["area:rules"]?.url || null,
@@ -222,7 +233,7 @@ async function status(req, me) {
 // Kurzlinks wie /zentrale/go/anleitung führen zur passenden Wiki-Seite (vom Abgleich angelegt).
 const GO = {
   anleitung: "start:anleitung", spickzettel: "start:spickzettel", proxmox: "pve:overview", netbird: "nb:overview",
-  domains: "nb:domains", bereiche: "area:overview", regeln: "area:rules",
+  domains: "nb:domains", bereiche: "area:overview", regeln: "area:rules", github: "gh:overview",
 };
 function goTo(res, key) {
   const docKey = GO[key];
@@ -244,6 +255,7 @@ function summary(me) {
     links: {
       anleitung: docUrl("start:anleitung"), spickzettel: docUrl("start:spickzettel"), proxmox: docUrl("pve:overview"),
       netbird: docUrl("nb:overview"), domains: docUrl("nb:domains"), bereiche: docUrl("area:overview"), regeln: docUrl("area:rules"),
+      github: docUrl("gh:overview"),
     },
   };
 }
@@ -277,6 +289,16 @@ const actions = {
   "proxmox/test": async (b) => run("brainbox-connect", ["proxmox", "test", ...(validName(b.name) ? [b.name] : [])], { timeout: 60000 }),
   netbird: async (b) => ([b.url, b.token].every((x) => ONE_LINE(x) && x) ? run("brainbox-connect", ["netbird", b.url, b.token]) : { ok: false, output: "Adresse und Token ausfüllen." }),
   "netbird/remove": async () => run("brainbox-connect", ["netbird", "remove"]),
+  // GitHub: Token (leer = bisherigen behalten), Konten mit Komma, Forks/Archivierte mitnehmen
+  github: async (b) => {
+    const token = String(b.token || "").trim();
+    const owners = Array.isArray(b.owners) ? b.owners.map((x) => String(x).trim()).filter(Boolean) : String(b.owners || "").split(/[\s,;]+/).filter(Boolean);
+    if (token && !/^[A-Za-z0-9_]{20,255}$/.test(token)) return { ok: false, output: "Das sieht nicht wie ein GitHub-Token aus (ghp_… oder github_pat_…)." };
+    if (owners.some((o) => !/^[A-Za-z0-9-]{1,39}$/.test(o))) return { ok: false, output: "Konten bitte nur mit Komma trennen, z. B. pmornhart, Morni-Team" };
+    const args = ["github", ...(token ? [token] : []), "--owners", owners.join(","), b.forks ? "--forks" : "--no-forks", b.archived ? "--archived" : "--no-archived", ...(b.publicOnly ? ["--no-token"] : [])];
+    return run("brainbox-connect", args, { timeout: 300000 });
+  },
+  "github/remove": async () => run("brainbox-connect", ["github", "remove"]),
   claude: async () => {
     const r = await run("brainbox-connect", ["claude", "--json"]);
     const m = r.output.match(/\{[\s\S]*\}\s*$/);
@@ -382,7 +404,7 @@ async function agentPush(req, res) {
 // --- Interne Aufrufe vom Wiki-Kern: Brainbox-Werkzeuge für Claude (MCP) ------------------------------
 // Nur vom selben Rechner und mit dem Schlüssel aus /etc/brainbox/intern.key. Ob der Nutzer Admin ist,
 // prüft das Werkzeug im Kern, bevor es hier anfragt.
-const INTERN_ACTIONS = new Set(["proxmox/add", "proxmox/agent", "proxmox/rename", "proxmox/remove", "proxmox/test", "netbird", "sync", "update/check", "update/start"]);
+const INTERN_ACTIONS = new Set(["proxmox/add", "proxmox/agent", "proxmox/rename", "proxmox/remove", "proxmox/test", "netbird", "github", "sync", "update/check", "update/start"]);
 async function intern(req, res, name) {
   let key = "";
   try { key = fs.readFileSync(path.join(CONF_DIR, "intern.key"), "utf8").trim(); } catch { /* fehlt */ }
@@ -393,7 +415,7 @@ async function intern(req, res, name) {
   if (body === null || body === undefined) return send(res, 400, { error: "JSON" });
   if (name === "status") {
     const s = await status(req, null);
-    return send(res, 200, { ok: true, version: s.version, update: s.update, wiki: { url: s.wiki.url }, proxmox: s.proxmox.map(({ tokenId, ...x }) => x), netbird: s.netbird ? { url: s.netbird.url } : null, sync: s.sync });
+    return send(res, 200, { ok: true, version: s.version, update: s.update, wiki: { url: s.wiki.url }, proxmox: s.proxmox.map(({ tokenId, ...x }) => x), netbird: s.netbird ? { url: s.netbird.url } : null, github: s.github, origins: s.origins, sync: s.sync });
   }
   if (!INTERN_ACTIONS.has(name)) return send(res, 404, { error: "Unbekannte Aktion" });
   return send(res, 200, await actions[name](body || {}));

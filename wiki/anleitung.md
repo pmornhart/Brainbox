@@ -10,6 +10,7 @@ Links ist die **Seitenleiste**. Oben stehen Startseite, Suche, Entwürfe und **E
 | **Bereiche** | Alles nach Themen sortiert, z. B. „Minecraft-Server“ oder „Homelab“ |
 | **Proxmox** | Jede VM und jeder Container – automatisch, alle 5 Minuten |
 | **NetBird** | Geräte, Netzwerke und Domains (auch vom Reverse-Proxy) – automatisch |
+| **GitHub** | Je Repo eine Seite: was drin ist, wie man es installiert, wo es läuft – automatisch |
 | **Von Claude** | Was Claude schreibt, wenn nichts anderes passt |
 
 Eigene Sammlungen legst du mit **„+ Neue Sammlung“** in der Seitenleiste an.
@@ -35,8 +36,18 @@ Die **Suche** (`Strg`+`K` oder `/`) durchsucht alle Seiten, auch Tabellen. Gute 
 Sobald ein Proxmox-Server verbunden ist, legt Brainbox für jede VM und jeden Container eine eigene Seite an – mit Status, IP-Adressen, Domains, NetBird-Gerät und Bereich. Neue VMs erscheinen nach spätestens 5 Minuten, gelöschte wandern ins Archiv.
 
 - **Alles ab der Überschrift „Notizen“ gehört dir.** Der Abgleich überschreibt nur den Teil darüber. Dort ist Platz für Passwort-Hinweise (nicht die Passwörter selbst), Anleitungen und Besonderheiten.
-- **Übersichten:** [Proxmox]({{proxmox}}) · [NetBird]({{netbird}}) · [Bereiche]({{bereiche}})
+- **Übersichten:** [Proxmox]({{proxmox}}) · [NetBird]({{netbird}}) · [GitHub]({{github}}) · [Bereiche]({{bereiche}})
 - **Weiteren Server verbinden:** [Einstellungen → Brainbox → Proxmox-Server](/settings/brainbox-proxmox) – im selben Netz oder an einem anderen Standort (dann meldet sich der Server selbst). Dort kannst du Server auch jederzeit umbenennen.
+
+## GitHub und die Herkunft deiner VMs
+
+Mit [Einstellungen → Brainbox → GitHub](/settings/brainbox-github) holst du deine Repos ins Wiki. Am besten mit einem Token, der nur lesen darf; ohne Token kommen nur die öffentlichen Repos. Jedes Repo bekommt eine Seite mit **Was drin ist**, **Installieren** (aus dem README, sonst ein Vorschlag nach den Dateien) und **Läuft auf** – welche VMs daraus stammen.
+
+Bei jeder VM und jedem Container steht die **Herkunft**, damit du weißt, woher du sie hast:
+
+- **community-scripts** – erkannt am Tag „community-script“ oder an der Beschreibung, die die Skripte in Proxmox hinterlassen, mit Link zum Skript
+- **eigenes Repo** – über einen GitHub-Link in der Proxmox-Beschreibung, eine Zeile `repo: besitzer/repo` dort oder weil die VM so heißt wie das Repo
+- **selbst festgelegt** – in den [Zuordnungsregeln]({{regeln}}) in der Tabelle **Muster | Herkunft**, z. B. `name:mc-*` → `MoinMornhart/minecraft-battleworld`
 
 ## Bereiche: was wohin gehört
 

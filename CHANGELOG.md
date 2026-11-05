@@ -2,6 +2,17 @@
 
 Brainbox hat eigene Versionen. Der Kern (Outline) ist je Version fest getestet und steht dabei.
 
+## 1.5.0 – 05.11.2026 · Kern: Outline v1.12.0
+
+GitHub im Wiki – und bei jeder VM steht, woher sie stammt.
+
+- **GitHub verbinden:** unter *Einstellungen → Brainbox → GitHub*, im Terminal mit `brainbox-connect github` oder über Claude. Am besten mit einem Token, der nur lesen darf; ohne Token kommen die öffentlichen Repos der Konten, die du einträgst
+- **Je Repo eine Seite** in der neuen Sammlung „GitHub“ (nach Konten sortiert): kurz erklärt, **was drin ist**, **wie man es installiert** (aus dem README, sonst ein Vorschlag nach den Dateien), Art des Projekts, wichtige Dateien und **wo es läuft**. Eigene Notizen unter „Notizen“ bleiben
+- **Herkunft bei jeder VM und jedem Container:** community-scripts (mit Link zum Skript), dein Repo oder was du festlegst – auf der VM-Seite, in der Proxmox-Übersicht und in der GitHub-Übersicht
+- **Herkunft festlegen:** neue Tabelle *Muster | Herkunft* in den Zuordnungsregeln (wird auf bestehenden Seiten einmal ergänzt) oder eine Zeile `repo: besitzer/repo` in der Proxmox-Beschreibung
+- **Aufgeräumt:** Die Werbe-Beschreibung von community-scripts erscheint nicht mehr als „Beschreibung aus Proxmox“, HTML in Beschreibungen wird zu lesbarem Text
+- **Claude** kennt die GitHub-Seiten und die Herkunft und kann GitHub selbst verbinden (Werkzeug `brainbox_github_connect`)
+
 ## 1.4.3 – 05.11.2026 · Kern: Outline v1.12.0
 
 - **Servernamen frei wählbar:** Proxmox-Server dürfen jetzt jeden Namen tragen – mit Punkten, Leerzeichen, Großbuchstaben, Umlauten und Sonderzeichen, z. B. `ph.morn.lan` oder `Büro: Köln (alt)`. Nur leer oder mehrzeilig geht nicht. Gilt beim Hinzufügen, für Server an anderen Standorten, beim Umbenennen und für Claude

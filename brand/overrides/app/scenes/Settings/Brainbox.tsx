@@ -20,6 +20,7 @@ import {
 } from "outline-icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useHistory } from "react-router-dom";
+import { GitHubIcon } from "~/components/Icons/BrainboxIconSet";
 import styled from "styled-components";
 import Heading from "~/components/Heading";
 import Scene from "~/components/Scene";
@@ -45,6 +46,7 @@ export const zentralePages: ZentralePage[] = [
   { page: "uebersicht", path: settingsPath("brainbox"), name: "Übersicht", group: "Brainbox", access: "admin", icon: HomeIcon },
   { page: "proxmox", path: settingsPath("brainbox-proxmox"), name: "Proxmox-Server", group: "Brainbox", access: "admin", icon: ServerRackIcon },
   { page: "netbird", path: settingsPath("brainbox-netbird"), name: "NetBird", group: "Brainbox", access: "admin", icon: GlobeIcon },
+  { page: "github", path: settingsPath("brainbox-github"), name: "GitHub", group: "Brainbox", access: "admin", icon: GitHubIcon },
   { page: "claude", path: settingsPath("brainbox-claude"), name: "Künstliche Intelligenz", group: "Brainbox", access: "admin", icon: SparklesIcon },
   { page: "anmeldung", path: settingsPath("brainbox-anmeldung"), name: "Anmeldung", group: "Brainbox", access: "admin", icon: PadlockIcon },
   { page: "update", path: settingsPath("brainbox-update"), name: "Version & Update", group: "Brainbox", access: "admin", icon: DownloadIcon },

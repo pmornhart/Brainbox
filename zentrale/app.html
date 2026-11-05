@@ -190,7 +190,7 @@ html.embed, html.embed body { height: auto; background: transparent; }
     if (q.get("theme") === "light") document.documentElement.dataset.theme = "light";
     return;
   }
-  var map = { uebersicht: "brainbox", proxmox: "brainbox-proxmox", netbird: "brainbox-netbird", claude: "brainbox-claude", anmeldung: "brainbox-anmeldung", update: "brainbox-update",
+  var map = { uebersicht: "brainbox", proxmox: "brainbox-proxmox", netbird: "brainbox-netbird", github: "brainbox-github", claude: "brainbox-claude", anmeldung: "brainbox-anmeldung", update: "brainbox-update",
     allgemein: "details", mitglieder: "users", sicherheit: "security", vorlagen: "templates", export: "export", profil: "", darstellung: "preferences", benachrichtigungen: "notifications" };
   window.BRAINBOX_REDIRECT = true;
   var target = map[location.hash.slice(1)];
@@ -244,13 +244,13 @@ html.embed, html.embed body { height: auto; background: transparent; }
   const cmd = (text) => `<div class="cmd">${esc(text)}<button type="button" class="btn small" data-copy="${esc(text)}">Kopieren</button></div>`;
 
   const NAV = [
-    ["uebersicht", "Übersicht"], ["proxmox", "Proxmox-Server"], ["netbird", "NetBird"], ["claude", "Künstliche Intelligenz"],
+    ["uebersicht", "Übersicht"], ["proxmox", "Proxmox-Server"], ["netbird", "NetBird"], ["github", "GitHub"], ["claude", "Künstliche Intelligenz"],
     ["bereiche", "Bereiche"], ["anmeldung", "Anmeldung"], ["update", "Version & Update"],
   ];
   const navDot = (k) => {
     if (!S) return "";
     if (k === "update") return hasUpdate() ? `<span class="upd" title="Update verfügbar">${ICON_UPDATE}${esc(S.update.latest)}</span>` : "";
-    const st = { proxmox: S.proxmox.length ? "ok" : "", netbird: S.netbird ? "ok" : "", claude: tp("mcp", true) ? "ok" : "", bereiche: S.sync.counts.areas ? "ok" : "" }[k];
+    const st = { proxmox: S.proxmox.length ? "ok" : "", netbird: S.netbird ? "ok" : "", github: S.github ? (S.github.ok === false ? "warn" : "ok") : "", claude: tp("mcp", true) ? "ok" : "", bereiche: S.sync.counts.areas ? "ok" : "" }[k];
     return st === undefined ? "" : `<span class="dot ${st}"></span>`;
   };
 
@@ -288,6 +288,7 @@ html.embed, html.embed body { height: auto; background: transparent; }
       <div class="tiles">
         ${tile("proxmox", S.proxmox.length ? "ok" : "", "Proxmox-Server", String(S.proxmox.length), S.proxmox.length ? `${c.guests} VMs und Container im Wiki` : "noch keiner verbunden")}
         ${tile("netbird", S.netbird ? "ok" : "", "NetBird", S.netbird ? "verbunden" : "aus", S.netbird ? `${c.peers} Geräte im Wiki` : "Geräte und Domains ins Wiki holen")}
+        ${tile("github", S.github ? (S.github.ok === false ? "warn" : "ok") : "", "GitHub", S.github ? "verbunden" : "aus", S.github ? `${c.repos || 0} Repos im Wiki` : "Repos und Herkunft ins Wiki holen")}
         ${tile("claude", tp("mcp", true) ? "ok" : "", "Künstliche Intelligenz", tp("mcp", true) ? "an" : "aus", tp("mcp", true) ? "Claude mit deiner Anmeldung" : "Claude zulassen")}
         ${tile("bereiche", c.areas ? "ok" : "", "Bereiche", String(S.sync.areas.filter((x) => !x.includes("/")).length), c.areas ? (c.areas > S.sync.areas.filter((x) => !x.includes("/")).length ? `mit ${c.areas - S.sync.areas.filter((x) => !x.includes("/")).length} Unterbereichen` : "per Zuordnungsregeln sortiert") : "z. B. Minecraft-Server")}
         ${tile("anmeldung", "ok", "Anmeldung", String(ways), ways === 1 ? "Weg zum Einloggen aktiv" : "Wege zum Einloggen aktiv")}
@@ -370,6 +371,38 @@ html.embed, html.embed body { height: auto; background: transparent; }
               <div class="full"><button class="btn primary" type="submit">Verbinden und prüfen</button></div>
             </form></div></li>
         </ol></div>`;
+  }
+
+  function pGithub() {
+    const g = S.github;
+    const o = S.origins;
+    const who = g ? (g.token ? (g.login ? `Token von ${esc(g.login)} · nur lesen` : "Token · nur lesen") : "ohne Token · nur öffentliche Repos") : "";
+    return `<div class="phead"><div class="kicker">Verbindungen</div><h1>GitHub</h1>
+      <p class="lede">Holt deine Repos ins Wiki: Für jedes Repo gibt es eine Seite, die kurz erklärt, was drin ist und wie man es installiert – aus dem README, sonst als Vorschlag nach den Dateien. Dazu steht bei jeder VM und jedem Container, woher er stammt: von community-scripts, aus einem deiner Repos oder was du festlegst.</p></div>
+      ${g ? `<div class="server"><span class="dot ${g.ok === false ? "warn" : "ok"}"></span><div><b>${g.ok === false ? "Nicht erreichbar" : "Verbunden"}</b><div class="meta">${who}${g.owners.length ? ` · Konten: ${g.owners.map(esc).join(", ")}` : ""} · ${S.sync.counts.repos || 0} Repos im Wiki${g.forks ? " · mit Forks" : ""}${g.archived ? " · mit archivierten" : ""}</div>${g.error ? `<div class="hint warn">${esc(g.error)}</div>` : ""}</div>
+        <div class="acts">${g.wikiUrl ? `<a class="btn small" href="${esc(g.wikiUrl)}" style="text-decoration:none">Im Wiki</a>` : ""}<button type="button" class="btn small danger" data-act="github/remove">Trennen</button></div></div>` : ""}
+      <pre class="out" id="out-github" hidden></pre>
+      <div class="card"><h2>${g ? "Zugang ändern" : "GitHub verbinden"}</h2>
+        <ol class="steps">
+          <li><div><b>Token anlegen (nur lesen)</b><p class="hint">Auf GitHub: <b>Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token</b>. Bei <b>Repository access</b> „All repositories“ wählen, bei <b>Permissions → Repository</b> nur <b>Contents: Read-only</b> (Metadata kommt von selbst). Brainbox ändert in GitHub nichts. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Direkt zu GitHub</a></p>
+            <p class="hint">Ohne Token geht es auch: Dann holt Brainbox nur die <b>öffentlichen</b> Repos der Konten, die du unten einträgst.</p></div></li>
+          <li><div><b>Eintragen</b>
+            <form class="grid" data-form="github">
+              <label>Token <input type="password" name="token" autocomplete="new-password" placeholder="${g?.token ? "leer lassen = bisheriger Token" : "github_pat_… oder ghp_…"}"></label>
+              <label>Nur diese Konten <input type="text" name="owners" value="${esc((g?.owners || []).join(", "))}" placeholder="z. B. pmornhart, Morni-Team (leer = alle)" autocomplete="off"></label>
+              <label class="check full"><input type="checkbox" name="forks" ${g?.forks ? "checked" : ""}> Forks mitnehmen (Kopien fremder Repos)</label>
+              <label class="check full"><input type="checkbox" name="archived" ${g?.archived ? "checked" : ""}> Archivierte Repos mitnehmen</label>
+              ${g?.token ? '<label class="check full"><input type="checkbox" name="publicOnly"> Token entfernen – nur öffentliche Repos der Konten</label>' : ""}
+              <div class="full"><button class="btn primary" type="submit">Verbinden und prüfen</button></div>
+            </form></div></li>
+        </ol></div>
+      <div class="card"><h2>Woher deine VMs und Container stammen</h2>
+        <p class="hint">${o ? `Bei <b>${o.known}</b> von ${S.sync.counts.guests} VMs und Containern ist die Herkunft bekannt – <b>${o.community}</b> von community-scripts, <b>${o.repo}</b> aus GitHub-Repos.` : "Sobald Proxmox verbunden ist, steht die Herkunft bei jeder VM und jedem Container."}</p>
+        <ul class="hint">
+          <li><b>community-scripts</b> erkennt Brainbox am Tag „community-script“ oder an der Beschreibung, die die Skripte in Proxmox hinterlassen – mit Link zum Skript.</li>
+          <li><b>Eigene Repos:</b> ein GitHub-Link in der Proxmox-Beschreibung, eine Zeile <code>repo: besitzer/repo</code> dort, oder die VM heißt wie das Repo.</li>
+          <li><b>Festlegen oder korrigieren</b> in den ${S.sync.rulesUrl ? `<a href="${esc(S.sync.rulesUrl)}">Zuordnungsregeln</a>` : "Zuordnungsregeln"} unter „Herkunft“, z. B. <code>name:mc-* → MoinMornhart/minecraft-battleworld</code>.</li>
+        </ul></div>`;
   }
 
   function pClaude() {
@@ -790,8 +823,8 @@ html.embed, html.embed body { height: auto; background: transparent; }
     }, btn);
   }, true);
 
-  const BRAINBOX_PAGES = ["uebersicht", "proxmox", "netbird", "claude", "bereiche", "anmeldung", "update"];
-  const PAGES = { uebersicht: pUebersicht, proxmox: pProxmox, netbird: pNetbird, claude: pClaude, bereiche: pBereiche, anmeldung: pAnmeldung, update: pUpdate,
+  const BRAINBOX_PAGES = ["uebersicht", "proxmox", "netbird", "github", "claude", "bereiche", "anmeldung", "update"];
+  const PAGES = { uebersicht: pUebersicht, proxmox: pProxmox, netbird: pNetbird, github: pGithub, claude: pClaude, bereiche: pBereiche, anmeldung: pAnmeldung, update: pUpdate,
     allgemein: pAllgemein, mitglieder: pMitglieder, sicherheit: pSicherheit, vorlagen: pVorlagen, export: pExport, profil: pProfil, darstellung: pDarstellung, benachrichtigungen: pBenachrichtigungen };
   function render() {
     if (!ME) return; // erst zeichnen, wenn die Anmeldung geladen ist (load ruft render danach auf)
@@ -855,6 +888,7 @@ html.embed, html.embed body { height: auto; background: transparent; }
       const name = a.dataset.act, out = name.split("/")[0];
       if (name === "proxmox/remove" && !a.dataset.sure) { a.dataset.sure = "1"; a.textContent = "Wirklich entfernen?"; return; }
       if (name === "netbird/remove" && !a.dataset.sure) { a.dataset.sure = "1"; a.textContent = "Wirklich trennen?"; return; }
+      if (name === "github/remove" && !a.dataset.sure) { a.dataset.sure = "1"; a.textContent = "Wirklich trennen?"; return; }
       if (name === "update/start" && !a.dataset.sure) { a.dataset.sure = "1"; a.textContent = "Jetzt wirklich starten?"; return; }
       act(name, a.dataset.name ? { name: a.dataset.name } : {}, a, out);
       return;
@@ -874,6 +908,7 @@ html.embed, html.embed body { height: auto; background: transparent; }
     const kind = f.dataset.form;
     if (kind === "proxmox") act("proxmox/add", { name: d.name.trim(), url: d.url.trim(), tokenId: d.tokenId.trim(), secret: d.secret, insecure: !!f.insecure.checked }, btn, "proxmox");
     if (kind === "netbird") act("netbird", { url: d.url.trim(), token: d.token }, btn, "netbird");
+    if (kind === "github") act("github", { token: (d.token || "").trim(), owners: (d.owners || "").split(/[\s,;]+/).filter(Boolean), forks: !!f.forks.checked, archived: !!f.archived.checked, publicOnly: !!(f.publicOnly && f.publicOnly.checked) }, btn, "github");
     if (kind === "proxmox-agent") act("proxmox/agent", { name: d.name.trim() }, btn, "proxmox");
     if (kind === "proxmox-rename") act("proxmox/rename", { name: f.dataset.name, newName: d.newName.trim() }, btn, "proxmox");
     if (kind === "link") act("link", { email: (d.email || "").trim() }, btn, "link");
