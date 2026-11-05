@@ -107,6 +107,8 @@ _Zuletzt aktualisiert: 05.11.2026_
 
 ## Offen / nächste Schritte
 
+- **Brainbox 1.4.2** (Philip 05.11.: Umbenennen in „ph.morn.lan“ ging nicht – „Eingabe muss dem Format entsprechen“): Servernamen erlauben jetzt Punkte (`NAME_RE` in `zentrale/server.mjs`, `pattern` in `app.html`, `pve_clean_name` in `brainbox-connect.sh`, `NAME_PATTERN` im MCP-Werkzeug), bis 63 Zeichen, kein „..“, nicht mit Punkt am Ende. Getestet im Testwiki: Umbenennen per Formular in `ph.morn.lan` (Seiten behalten ID, 0 neu, 0 archiviert) und per Terminal zurück.
+
 - **Brainbox 1.4.1** (Philip 05.11., Screenshot „Wiki-Bild“ zeigt noch Outline): Team-Avatar war `/images/icon-192.png` – Datei auf dem Server schon Brainbox, aber vom Browser zwischengespeichert. Jetzt `/images/brainbox-192.png` in `brainbox-login.sh`, Zentrale-Knopf „Brainbox-Logo“ und Anmeldeseite; `teile-einrichten.sh` stellt `…/images/icon-192.png` und leere Werte um. Getestet im Testwiki: Wert umgestellt, Zentrale und Seitenleiste laden das neue Bild, keine Seitenfehler.
 
 - **Brainbox 1.4.0 – eigene Symbole** (Philip 05.11.: „die icons sind immer noch die alten von outline“, Wahl: alle Symbole neu):

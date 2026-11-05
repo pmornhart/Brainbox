@@ -2,6 +2,10 @@
 
 Brainbox hat eigene Versionen. Der Kern (Outline) ist je Version fest getestet und steht dabei.
 
+## 1.4.2 – 05.11.2026 · Kern: Outline v1.12.0
+
+- **Servernamen mit Punkt:** Proxmox-Server dürfen jetzt auch Namen wie `ph.morn.lan` tragen – beim Hinzufügen, für Server an anderen Standorten und beim Umbenennen (Zentrale, Terminal und Claude)
+
 ## 1.4.1 – 05.11.2026 · Kern: Outline v1.12.0
 
 - **Wiki-Bild unter neuem Namen:** Das Brainbox-Logo als Wiki-Bild (Seitenleiste, Anmeldeseite, *Einstellungen → Allgemein*) liegt jetzt unter `/images/brainbox-192.png`. Unter dem alten Namen zeigten Browser oft noch das Outline-Bild aus dem Zwischenspeicher. Das Update stellt ein gesetztes Brainbox-Logo automatisch um; eigene Bilder bleiben
