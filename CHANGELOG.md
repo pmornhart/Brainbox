@@ -2,6 +2,11 @@
 
 Brainbox hat eigene Versionen. Der Kern (Outline) ist je Version fest getestet und steht dabei.
 
+## 1.2.1 – 05.11.2026 · Kern: Outline v1.12.0
+
+- **Behoben: „Jetzt aktualisieren“ auf der Webseite.** Das Update lief als Unterprozess der Zentrale. Am Ende startete es die Zentrale neu, dabei beendete systemd auch das Update selbst – kurz bevor es die neue Version eintrug. Der neue Stand lief zwar, aber Brainbox meldete weiter „Update verfügbar“. Jetzt läuft das Update als eigener Dienst und wird fertig
+- **Symbol im Browser-Tab** auch auf der Seite „Brainbox startet gerade“ (während Update oder Neustart)
+
 ## 1.2.0 – 05.11.2026 · Kern: Outline v1.12.0
 
 Domains vom NetBird-Reverse-Proxy im Wiki.

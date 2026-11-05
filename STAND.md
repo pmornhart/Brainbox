@@ -107,6 +107,13 @@ _Zuletzt aktualisiert: 05.11.2026_
 
 ## Offen / nächste Schritte
 
+- **Brainbox 1.2.1** (Philip 05.11.: „die Update-Funktion geht nicht auf der Webseite“, Tab-Symbol bei „Brainbox startet“):
+  - Ursache: `update/start` startete `update` per `spawn(detached)` – bleibt aber in der cgroup von `brainbox-zentrale.service`. `systemctl restart brainbox-zentrale` am Ende von `update.sh` beendete das Update vor dem Eintrag in `/root/.brainbox`. Sein Wiki lief danach schon mit 1.2.0-Code (18 Reverse-Proxy-Domains im Wiki), meldete aber weiter „Update verfügbar“.
+  - Lösung: Zentrale startet per `systemd-run --collect` (eigene Einheit). `update.sh` hat `detach_from_zentrale`: läuft es in der cgroup der Zentrale, startet es sich per `systemd-run` neu (Ausgabe per `append:` ins selbe Protokoll). Greift schon bei alten Zentralen, weil `update` sich vorher selbst aus `main` holt.
+  - Mit echtem systemd nachgestellt (Container `brainbox-systemd`, systemd als PID 1): vorher „Version eingetragen: NEIN“, nachher ja – über beide Wege.
+  - Tab-Symbol: Seite „Brainbox startet“ mit `/zentrale/icon-32.png`; `/favicon.ico` und `/images/favicon-*.png` kommen bei gestopptem Kern aus der Zentrale.
+  - Hinweis für Philip: Seine Domains heißen `mornihosting.de` (ohne g) – die Beispielregel `*.morninghosting.de` greift deshalb nicht; in den Zuordnungsregeln anpassen.
+
 - **Brainbox 1.2.0 – Reverse-Proxy-Domains** (Philip 05.11.: „das Wiki sieht die Reverse Proxys, also die Domains nicht“):
   - Sein Wiki zeigte „3 Netzwerke · 0 Domains“: Seine Domains liegen im NetBird-Reverse-Proxy (Reverse Proxy → Services, ab NetBird 0.65), nicht in den Netzwerk-Ressourcen.
   - `connect/sync.mjs` liest `GET /api/reverse-proxies/services` (Felder: `domain`, `mode`, `listen_port`, `enabled`, `terminated`, `private`, `meta.status`, `auth.*.enabled`, `targets[]` mit `target_type`, `target_id`, `host`, `port`, `path`). Passwort/PIN/Header-Werte werden nie gelesen oder geschrieben.
