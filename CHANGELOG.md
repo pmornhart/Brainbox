@@ -2,6 +2,16 @@
 
 Brainbox hat eigene Versionen. Der Kern (Outline) ist je Version fest getestet und steht dabei.
 
+## 1.2.0 – 05.11.2026 · Kern: Outline v1.12.0
+
+Domains vom NetBird-Reverse-Proxy im Wiki.
+
+- **Reverse-Proxy-Domains:** Brainbox liest die Dienste aus NetBird → Reverse Proxy → Services (ab NetBird 0.65). Jede Domain steht mit Ziel (Gerät bzw. IP und Port), Status (aktiv, Zertifikat kommt, Fehler …) und Schutz (SSO, Passwort, PIN, nur NetBird) auf der Seite *Domains*
+- **Richtig zugeordnet:** Über das Ziel landet jede Domain bei ihrer VM bzw. ihrem Container und ihrem NetBird-Gerät – und damit auch im passenden Bereich, z. B. `*.morninghosting.de → Minecraft-Server`
+- **TCP/UDP-Dienste** (z. B. ein Minecraft-Server auf Port 25565) erscheinen mit Port
+- **Sicher:** Passwörter, PINs und Header-Werte der Dienste kommen nie ins Wiki
+- **Klare Hinweise:** Fehlt dem NetBird-Token das Recht (Rolle *Admin* nötig) oder kennt NetBird noch keinen Reverse-Proxy, sagt die NetBird-Übersicht, was zu tun ist
+
 ## 1.1.0 – 05.11.2026 · Kern: Outline v1.12.0
 
 Aufgeräumt und neu sortiert: weniger Einstellungen, mehr Überblick.

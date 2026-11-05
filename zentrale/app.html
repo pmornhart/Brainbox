@@ -325,13 +325,13 @@ html.embed, html.embed body { height: auto; background: transparent; }
 
   function pNetbird() {
     return `<div class="phead"><div class="kicker">Verbindungen</div><h1>NetBird</h1>
-      <p class="lede">Holt alle NetBird-Geräte, Netzwerke und Domains ins Wiki und verknüpft sie mit den passenden VMs – über gleichen Namen oder gleiche IP.</p></div>
+      <p class="lede">Holt alle NetBird-Geräte, Netzwerke und Domains ins Wiki – auch die Domains vom NetBird-Reverse-Proxy samt Ziel, Status und Schutz – und verknüpft sie mit den passenden VMs: über das Ziel des Dienstes, gleichen Namen oder gleiche IP.</p></div>
       ${S.netbird ? `<div class="server"><span class="dot ok"></span><div><b>Verbunden</b><div class="meta">${esc(S.netbird.url)} · ${S.sync.counts.peers} Geräte im Wiki</div></div>
         <div class="acts">${S.netbird.wikiUrl ? `<a class="btn small" href="${esc(S.netbird.wikiUrl)}" style="text-decoration:none">Im Wiki</a>` : ""}<button type="button" class="btn small danger" data-act="netbird/remove">Trennen</button></div></div>` : ""}
       <pre class="out" id="out-netbird" hidden></pre>
       <div class="card"><h2>${S.netbird ? "Zugang ändern" : "NetBird verbinden"}</h2>
         <ol class="steps">
-          <li><div><b>Access Token anlegen</b><p class="hint">Im NetBird-Dashboard unter <b>Team → Service Users</b> einen Nutzer anlegen (Rolle „User“ reicht zum Lesen) und dort ein Token erstellen. Alternativ: eigenes Profil → Personal Access Tokens.</p></div></li>
+          <li><div><b>Access Token anlegen</b><p class="hint">Im NetBird-Dashboard unter <b>Team → Service Users</b> einen Nutzer mit Rolle <b>„Admin“</b> anlegen und dort ein Token erstellen. „User“ reicht für Geräte und Netzwerke, aber nicht für die Domains vom Reverse-Proxy. Brainbox ändert in NetBird nichts. Alternativ: eigenes Profil → Personal Access Tokens.</p></div></li>
           <li><div><b>Eintragen</b>
             <form class="grid" data-form="netbird">
               <label>API-Adresse <input type="text" name="url" required value="${esc(S.netbird?.url || "https://api.netbird.io")}"></label>

@@ -330,18 +330,52 @@ async function pveGuests(srv) {
   return guests;
 }
 
+// Schutz eines Reverse-Proxy-Dienstes – nur die Art, nie Passwort, PIN oder Header-Werte
+function protection(s) {
+  if (s.private) return "nur NetBird";
+  const a = s.auth || {};
+  const kinds = [];
+  if (a.bearer_auth?.enabled) kinds.push("Anmeldung (SSO)");
+  if (a.password_auth?.enabled) kinds.push("Passwort");
+  if (a.pin_auth?.enabled) kinds.push("PIN");
+  if (a.link_auth?.enabled) kinds.push("Link");
+  if ((a.header_auths || []).some((h) => h?.enabled)) kinds.push("Header");
+  return kinds.join(" + ") || "offen";
+}
+
 async function netbirdData() {
   const peers = (await netbird("/api/peers")) || [];
   const networks = (await netbird("/api/networks")) || [];
   const domains = [];
+  const resById = new Map();
   for (const n of networks) {
     let resources = [];
     try { resources = (await netbird(`/api/networks/${n.id}/resources`)) || []; } catch { /* ältere NetBird-Version */ }
     for (const r of resources) {
-      if (isDomain(r.address)) domains.push({ address: r.address, name: r.name, description: r.description, enabled: r.enabled !== false, network: n.name, groups: (r.groups || []).map((g) => g.name) });
+      resById.set(r.id, r);
+      if (isDomain(r.address)) domains.push({ address: norm(r.address), source: "network", name: r.name, description: r.description, enabled: r.enabled !== false, network: n.name, groups: (r.groups || []).map((g) => g.name), targets: [] });
     }
   }
-  return { peers, networks, domains };
+  // Reverse-Proxy (NetBird ab 0.65): Dienste mit eigener Domain, die auf ein Gerät oder eine Adresse zeigen
+  let services = [];
+  let proxyError = null;
+  let proxyMissing = false;
+  try { services = (await netbird("/api/reverse-proxies/services")) || []; } catch (e) { if (/HTTP 404/.test(e.message)) proxyMissing = true; else proxyError = e.message; }
+  for (const s of Array.isArray(services) ? services : []) {
+    const address = norm(s.domain || s.name);
+    if (!isDomain(address)) continue;
+    const targets = (s.targets || []).map((t) => {
+      const peer = t.target_type === "peer" ? peers.find((p) => p.id === t.target_id) : null;
+      const res = resById.get(t.target_id);
+      const resIp = res && !String(res.address || "").includes("/") ? res.address : "";
+      return { type: t.target_type, peerId: peer?.id || null, host: String(t.host || peer?.ip || resIp || ""), port: t.port || null, path: t.path || "", enabled: t.enabled !== false };
+    });
+    const entry = { address, source: "proxy", name: s.name, enabled: s.enabled !== false && !s.terminated, mode: s.mode || "http", listenPort: s.listen_port || null, status: s.meta?.status || "", protection: protection(s), targets };
+    const i = domains.findIndex((d) => d.address === address);
+    if (i >= 0) { entry.network = domains[i].network; domains[i] = entry; } else domains.push(entry);
+  }
+  domains.sort((a, b) => (a.source === b.source ? a.address.localeCompare(b.address) : a.source === "proxy" ? -1 : 1));
+  return { peers, networks, domains, proxyError, proxyMissing };
 }
 
 // Was gehört zusammen? Gast ↔ NetBird-Gerät ↔ Domain
@@ -356,14 +390,29 @@ function match(guests, nb) {
   const domainsOf = new Map();
   const add = (vmid, d) => { if (!domainsOf.has(vmid)) domainsOf.set(vmid, new Set()); domainsOf.get(vmid).add(d); };
   for (const g of guests) for (const d of g.manualDomains) add(g.uid, d.toLowerCase());
+  // Reverse-Proxy: Das Ziel (NetBird-Gerät oder IP) zeigt, wohin die Domain gehört
+  const guestOfPeerId = new Map([...peerOf.entries()].map(([uid, p]) => [p.id, uid]));
+  const peerDomains = new Map();
+  const viaTarget = new Set();
   for (const d of nb.domains) {
+    for (const t of d.targets || []) {
+      if (!t.enabled) continue;
+      const peer = t.peerId ? nb.peers.find((p) => p.id === t.peerId) : nb.peers.find((p) => t.host && p.ip === t.host);
+      if (peer) { if (!peerDomains.has(peer.id)) peerDomains.set(peer.id, new Set()); peerDomains.get(peer.id).add(d.address); viaTarget.add(d.address); }
+      const uid = (peer && guestOfPeerId.get(peer.id)) || guests.find((g) => t.host && g.ips.includes(t.host))?.uid;
+      if (uid) { add(uid, d.address); viaTarget.add(d.address); }
+    }
+  }
+  // sonst über den Namen: brainbox.example.de → Gast „brainbox“
+  for (const d of nb.domains) {
+    if (viaTarget.has(d.address)) continue;
     const label = norm(d.address.replace(/^\*\./, "").split(".")[0]);
     for (const g of guests) {
       const n = norm(g.name);
       if (n === label || n.endsWith(`-${label}`) || n.startsWith(`${label}-`)) add(g.uid, d.address);
     }
   }
-  return { peerOf, domainsOf };
+  return { peerOf, domainsOf, peerDomains };
 }
 
 // --- Bereiche: Zuordnungsregeln aus dem Wiki --------------------------------------------------
@@ -412,7 +461,7 @@ function parseRules(text) {
   return rules;
 }
 
-function classify(rules, guests, nb, peerOf, domainsOf) {
+function classify(rules, guests, nb, peerOf, domainsOf, peerDomains = new Map()) {
   // Treffer = { idx, area }: Position der Regel in der Liste – die weiter oben gewinnt, egal auf welchem Weg
   const NONE = { idx: Infinity, area: null };
   const hit = (type, values) => {
@@ -426,7 +475,7 @@ function classify(rules, guests, nb, peerOf, domainsOf) {
   const best = (...hits) => hits.reduce((a, b) => (b.idx < a.idx ? b : a), NONE);
   const domainVariants = (d) => { const bare = d.replace(/^\*\./, ""); return [d, bare, `x.${bare}`]; };
   const domains = new Map(); // Domain → { source, vmids:Set }
-  for (const d of nb.domains) domains.set(d.address.toLowerCase(), { source: `NetBird · ${d.network}`, vmids: new Set() });
+  for (const d of nb.domains) domains.set(d.address.toLowerCase(), { source: d.source === "proxy" ? "NetBird · Reverse-Proxy" : `NetBird · ${d.network}`, vmids: new Set() });
   for (const [vmid, set] of domainsOf) for (const d of set) {
     const k = d.toLowerCase();
     if (!domains.has(k)) domains.set(k, { source: "Proxmox-Notizen", vmids: new Set() });
@@ -444,7 +493,8 @@ function classify(rules, guests, nb, peerOf, domainsOf) {
   for (const p of nb.peers) {
     const vmid = guestOfPeerId.get(p.id);
     peerHit.set(p.id, best(hit("name", [p.name, p.hostname]), hit("gruppe", (p.groups || []).map((x) => x.name)),
-      vmid !== undefined ? guestHit.get(vmid) : NONE, hit("domain", [p.dns_label, ...(p.extra_dns_labels || [])])));
+      vmid !== undefined ? guestHit.get(vmid) : NONE, hit("domain", [p.dns_label, ...(p.extra_dns_labels || [])]),
+      ...[...(peerDomains.get(p.id) || [])].map((d) => domainHit.get(d) || NONE)));
   }
   const areaOf = (m) => new Map([...m.entries()].map(([k, v]) => [k, v.area]));
   // Alle Bereiche aus den Regeln, inklusive Oberbereichen
@@ -531,7 +581,7 @@ async function main() {
     servers.push(info);
   }
   const nb = useNb ? await netbirdData() : { peers: [], networks: [], domains: [] };
-  const { peerOf, domainsOf } = match(guests, nb);
+  const { peerOf, domainsOf, peerDomains } = match(guests, nb);
   const pveLink = (g) => `${g.pveUrl}/#v1:0:=${g.type === "lxc" ? "lxc" : "qemu"}%2F${g.vmid}`;
   const srvTitle = (name) => `${name} (Proxmox-Server)`;
 
@@ -560,7 +610,14 @@ async function main() {
   rulesDoc.hash = "regeln-gehoeren-dir";
   const rulesText = (await outline("documents.info", { id: rulesDoc.id }))?.data?.text || "";
   const rules = parseRules(rulesText);
-  const cls = classify(rules, guests, nb, peerOf, domainsOf);
+  const cls = classify(rules, guests, nb, peerOf, domainsOf, peerDomains);
+  // Domain als Link (Web) oder mit Port (TCP/UDP/TLS über den Reverse-Proxy)
+  const domInfo = new Map(nb.domains.map((d) => [d.address, d]));
+  const domLink = (addr) => {
+    const d = domInfo.get(addr);
+    if (d?.source === "proxy" && d.mode !== "http") return esc(`${addr}${d.listenPort ? `:${d.listenPort}` : ""}`);
+    return `[${esc(addr)}](https://${addr.replace(/^\*\./, "")})`;
+  };
   await ensureDoc(state, "area:overview", "Bereiche – Übersicht", colAreas);
   for (const a of cls.areas) {
     const parent = a.includes("/") ? state.docs[`area:${a.slice(0, a.lastIndexOf("/"))}`]?.id : undefined;
@@ -578,7 +635,7 @@ async function main() {
         ["CPU", g.cpus ? `${g.cpus} Kerne` : "–"], ["RAM", gb(g.mem)], ["Disk", gb(g.disk)], ["Betriebssystem", g.os || "–"],
         ["IP-Adressen", g.ips.join(", ") || "–"], ["Tags", g.tags.join(", ") || "–"],
         ["NetBird", p ? `${link(state.docs[`nb:${p.id}`], p.dns_label || p.name)} · ${p.ip} · ${p.connected ? "🟢 online" : "⚪ offline"}` : "–"],
-        ["Domains", doms.map((d) => `[${d}](https://${d.replace(/^\*\./, "")})`).join(", ") || "–"],
+        ["Domains", doms.map(domLink).join(", ") || "–"],
         ["Bereich", areaLink(cls.guestArea.get(g.uid))],
         ["Proxmox", `[In Proxmox öffnen](${pveLink(g)})`],
       ];
@@ -621,24 +678,38 @@ async function main() {
         ["Zuletzt gesehen", p.last_seen ? new Date(p.last_seen).toLocaleString("de-DE", { timeZone: process.env.TZ || "Europe/Berlin" }) : "–"],
         ["Betriebssystem", p.os], ["NetBird-Version", p.version], ["Gruppen", (p.groups || []).map((x) => x.name).join(", ") || "–"],
         ["Proxmox", g ? link(state.docs[`pve:${g.uid}`], `${g.name} (${g.vmid})`) : "–"],
+        ["Domains", [...(peerDomains.get(p.id) || [])].sort().map(domLink).join(", ") || "–"],
         ["Bereich", areaLink(cls.peerArea.get(p.id))],
       ];
-      const table = ["| Eigenschaft | Wert |", "|---|---|", ...rows.map(([k, v]) => `| **${k}** | ${["Proxmox", "Bereich"].includes(k) ? v : esc(v || "–")} |`)].join("\n");
+      const table = ["| Eigenschaft | Wert |", "|---|---|", ...rows.map(([k, v]) => `| **${k}** | ${["Proxmox", "Domains", "Bereich"].includes(k) ? v : esc(v || "–")} |`)].join("\n");
       await writeDoc(state, `nb:${p.id}`, p.name, table);
     }
     const online = nb.peers.filter((p) => p.connected).length;
-    const peerRows = nb.peers.map((p) => {
-      const g = guestOfPeer.get(p.id);
-      return `| ${link(state.docs[`nb:${p.id}`], p.name)} | ${esc(p.ip)} | ${esc(p.dns_label || "–")} | ${p.connected ? "🟢 online" : "⚪ offline"} | ${g ? link(state.docs[`pve:${g.uid}`], `${g.name} (${g.vmid})`) : "–"} |`;
-    });
+    const proxyN = nb.domains.filter((d) => d.source === "proxy").length;
+    const proxyNote = nb.proxyError
+      ? `\n\n⚠️ Den Reverse-Proxy konnte Brainbox nicht lesen (${esc(nb.proxyError)}). Der NetBird-Zugang braucht dafür die Rolle **Admin** – neuen Token unter [Einstellungen → Brainbox → NetBird](/settings/brainbox-netbird) eintragen.`
+      : nb.proxyMissing ? "\n\nℹ️ Dein NetBird hat noch keinen Reverse-Proxy (gibt es ab NetBird 0.65). Nach einem NetBird-Update erscheinen dessen Domains hier von selbst." : "";
     await writeDoc(state, "nb:overview", "NetBird – Übersicht",
-      `**${nb.peers.length}** Geräte, davon **${online}** online · **${nb.networks.length}** Netzwerke · **${nb.domains.length}** Domains ([Liste](${state.docs["nb:domains"].url}))\n\n| Gerät | NetBird-IP | DNS-Name | Status | Proxmox |\n|---|---|---|---|---|\n${peerRows.join("\n")}`);
-    const domRows = nb.domains.map((d) => {
-      const vmids = [...domainsOf.entries()].filter(([, set]) => set.has(d.address)).map(([v]) => guests.find((g) => g.uid === v)).filter(Boolean);
-      return `| ${esc(d.address)} | ${esc(d.network)} | ${d.enabled ? "an" : "aus"} | ${vmids.map((g) => link(state.docs[`pve:${g.uid}`], `${g.name} (${g.vmid})`)).join(", ") || "–"} | ${areaLink(cls.domainArea.get(d.address.toLowerCase()))} |`;
-    });
+      `**${nb.peers.length}** Geräte, davon **${online}** online · **${nb.networks.length}** Netzwerke · **${nb.domains.length}** Domains, davon **${proxyN}** über den Reverse-Proxy ([Liste](${state.docs["nb:domains"].url}))${proxyNote}\n\n| Gerät | NetBird-IP | DNS-Name | Status | Proxmox | Domains |\n|---|---|---|---|---|---|\n${nb.peers.map((p) => {
+        const g = guestOfPeer.get(p.id);
+        return `| ${link(state.docs[`nb:${p.id}`], p.name)} | ${esc(p.ip)} | ${esc(p.dns_label || "–")} | ${p.connected ? "🟢 online" : "⚪ offline"} | ${g ? link(state.docs[`pve:${g.uid}`], `${g.name} (${g.vmid})`) : "–"} | ${[...(peerDomains.get(p.id) || [])].sort().map(domLink).join(", ") || "–"} |`;
+      }).join("\n")}`);
+    const PROXY_STATUS = { active: "🟢 aktiv", pending: "🟡 wird eingerichtet", certificate_pending: "🟡 Zertifikat kommt", tunnel_not_created: "🟠 kein Tunnel", certificate_failed: "🔴 Zertifikat fehlgeschlagen", error: "🔴 Fehler" };
+    const domStatus = (d) => (!d.enabled ? "⚪ aus" : d.source === "proxy" ? PROXY_STATUS[d.status] || esc(d.status || "–") : "🟢 an");
+    const domSource = (d) => (d.source === "proxy" ? `Reverse-Proxy · ${d.mode === "http" ? "Web" : esc(d.mode.toUpperCase())}` : `Netzwerk · ${esc(d.network)}`);
+    const domTarget = (d) => (d.targets || []).filter((t) => t.enabled).map((t) => {
+      const p = t.peerId ? nb.peers.find((x) => x.id === t.peerId) : null;
+      return `${p ? link(state.docs[`nb:${p.id}`], p.name) : esc(t.host || "?")}${t.port ? `:${t.port}` : ""}${t.path && t.path !== "/" ? esc(t.path) : ""}`;
+    }).join(", ") || "–";
+    const domOwners = (d) => {
+      const gs = [...domainsOf.entries()].filter(([, set]) => set.has(d.address)).map(([v]) => guests.find((g) => g.uid === v)).filter(Boolean);
+      if (gs.length) return gs.map((g) => link(state.docs[`pve:${g.uid}`], `${g.name} (${g.vmid})`)).join(", ");
+      const ps = nb.peers.filter((p) => peerDomains.get(p.id)?.has(d.address));
+      return ps.map((p) => link(state.docs[`nb:${p.id}`], p.name)).join(", ") || "–";
+    };
+    const domRows = nb.domains.map((d) => `| ${domLink(d.address)} | ${domSource(d)} | ${domTarget(d)} | ${domStatus(d)} | ${esc(d.protection || "–")} | ${domOwners(d)} | ${areaLink(cls.domainArea.get(d.address))} |`);
     await writeDoc(state, "nb:domains", "Domains",
-      `Alle Domains aus den NetBird-Netzwerken und wozu sie gehören. Zuordnung automatisch über den Namen (z. B. **brainbox**.morncloud.de → Gast „brainbox“) oder von Hand mit einer Zeile \`domain: name.example.de\` in den Proxmox-Notizen des Gasts.\n\n| Domain | Netzwerk | Aktiv | Gehört zu | Bereich |\n|---|---|---|---|---|\n${domRows.join("\n") || "| – | – | – | – | – |"}`);
+      `Alle Domains aus NetBird und wohin sie zeigen – vom **Reverse-Proxy** (im NetBird-Dashboard unter Reverse Proxy → Services) und aus den **Netzwerken**. Zugeordnet wird über das Ziel des Dienstes (NetBird-Gerät oder IP der VM), sonst über den Namen (z. B. **brainbox**.morncloud.de → Gast „brainbox“) oder von Hand mit einer Zeile \`domain: name.example.de\` in den Proxmox-Notizen des Gasts.${proxyNote}\n\n| Domain | Quelle | Ziel | Status | Schutz | Gehört zu | Bereich |\n|---|---|---|---|---|---|---|\n${domRows.join("\n") || "| – | – | – | – | – | – | – |"}`);
   }
 
   // Bereiche: je Bereich ein Eintrag mit Domains, VMs/Containern und Geräten
@@ -697,7 +768,7 @@ async function main() {
       guests: guests.length,
       running: guests.filter((g) => g.status === "running").length,
     } : null,
-    netbird: useNb ? { peers: nb.peers.length, online: nb.peers.filter((p) => p.connected).length, domains: nb.domains.length, networks: nb.networks.length } : null,
+    netbird: useNb ? { peers: nb.peers.length, online: nb.peers.filter((p) => p.connected).length, domains: nb.domains.length, proxies: nb.domains.filter((d) => d.source === "proxy").length, networks: nb.networks.length } : null,
     areas: summary.filter(({ a }) => !a.includes("/")).map(({ a, ds, gs, ps }) => ({ name: a, url: state.docs[`area:${a}`]?.url || null, domains: ds.length, guests: gs.length, peers: ps.length })),
     loose: loose.ds.length + loose.gs.length + loose.ps.length,
   };
@@ -714,7 +785,7 @@ async function main() {
   saveState(state);
   const parts = [];
   if (usePve) parts.push(`Proxmox: ${servers.length} Server, ${guests.length} Gäste${servers.some((i) => !i.ok) ? ` (${servers.filter((i) => !i.ok).length} nicht erreichbar)` : ""}`);
-  if (useNb) parts.push(`NetBird: ${nb.peers.length} Geräte, ${nb.domains.length} Domains`);
+  if (useNb) parts.push(`NetBird: ${nb.peers.length} Geräte, ${nb.domains.length} Domains (${nb.domains.filter((d) => d.source === "proxy").length} Reverse-Proxy)${nb.proxyError ? " – Reverse-Proxy nicht lesbar" : ""}`);
   parts.push(`Bereiche: ${cls.areas.length}`);
   const changes = `${created} neu, ${updated} geändert, ${archived} archiviert`;
   if (!QUIET || created || updated || archived) say(`Abgleich fertig · ${parts.join(" · ")} · ${changes}`);

@@ -9,7 +9,7 @@ Links ist die **Seitenleiste**. Oben stehen Startseite, Suche, Entwürfe und **E
 | **Start** | Diese Anleitung und der Spickzettel |
 | **Bereiche** | Alles nach Themen sortiert, z. B. „Minecraft-Server“ oder „Homelab“ |
 | **Proxmox** | Jede VM und jeder Container – automatisch, alle 5 Minuten |
-| **NetBird** | Geräte, Netzwerke und Domains – automatisch |
+| **NetBird** | Geräte, Netzwerke und Domains (auch vom Reverse-Proxy) – automatisch |
 | **Von Claude** | Was Claude schreibt, wenn nichts anderes passt |
 
 Eigene Sammlungen legst du mit **„+ Neue Sammlung“** in der Seitenleiste an.

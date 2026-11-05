@@ -418,7 +418,7 @@ cmd_netbird() {
     command -v whiptail >/dev/null 2>&1 || fail "Beispiel: brainbox-connect netbird https://api.netbird.io <token>"
     url="$(wt --title "NETBIRD" --inputbox "Adresse der NetBird-API\n(NetBird Cloud: https://api.netbird.io, selbst gehostet: die Adresse deines NetBird-Servers)" 11 72 "$(conf_get NETBIRD_URL || true)")" || return 0
     [[ -n "$url" ]] || url="https://api.netbird.io"
-    wt --title "NETBIRD" --msgbox "Token anlegen: im NetBird-Dashboard unter Team → Service Users einen Nutzer mit Rolle 'Admin' oder 'User' anlegen und dort ein Access Token erstellen.\n\n(Alternativ: eigenes Profil → Personal Access Tokens.)" 12 72 || true
+    wt --title "NETBIRD" --msgbox "Token anlegen: im NetBird-Dashboard unter Team → Service Users einen Nutzer mit Rolle 'Admin' anlegen und dort ein Access Token erstellen. ('User' reicht für Geräte, aber nicht für die Domains vom Reverse-Proxy. Brainbox liest nur.)\n\n(Alternativ: eigenes Profil → Personal Access Tokens.)" 12 72 || true
     tok="$(wt --title "NETBIRD" --passwordbox "Access Token" 9 72)" || return 0
     [[ -n "$tok" ]] || tok="$(conf_get NETBIRD_TOKEN)"
   fi

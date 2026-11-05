@@ -36,7 +36,7 @@ Brainbox ist ein eigenständiges Wiki für dein Homelab: Editor mit Echtzeit-Bea
 | ⚙️ **Aufgeräumte Einstellungen** | Drei Gruppen statt zwanzig Punkten: *Brainbox* (Proxmox-Server, NetBird, Claude, Anmeldung, Update), *Wiki* und *Konto*. Jede Seite erklärt Schritt für Schritt, was zu tun ist. |
 | 📖 **Anleitung im Wiki** | Sammlung „Start“ mit Anleitung und Spickzettel – liegt nach der Installation bereit und wird bei Updates aufgefrischt. |
 | 🖥️ **Beliebig viele Proxmox-Server** | Jeder Server bekommt eine eigene Seite mit Nodes und Auslastung, darunter je VM und Container ein Eintrag. Neue erscheinen nach spätestens 5 Minuten. |
-| 🌐 **NetBird** | Geräte, Netzwerke und Domains, automatisch mit den passenden VMs verknüpft. |
+| 🌐 **NetBird** | Geräte, Netzwerke und Domains – auch vom NetBird-Reverse-Proxy –, automatisch mit den passenden VMs verknüpft. |
 | 🗂️ **Bereiche** | Regeln wie `*.morninghosting.de → Minecraft-Server` sortieren Domains, VMs und Geräte, mit Unterbereichen. |
 | 🤖 **Claude schreibt mit** | Eigenes Konto „Claude“ über den MCP-Anschluss, in der Claude-App wie in Claude Code. |
 | 📚 **Ein Container = ein Wiki** | Wiki und Admin legt die Installation an, am Ende gibt es einen Login-Link. Weiteres Wiki: Befehl nochmal, andere Domain. |
@@ -153,7 +153,7 @@ brainbox-connect proxmox add hetzner https://203.0.113.10:8006 'brainbox@pve!wik
 
 ## 🌐 NetBird
 
-Unter *Einstellungen → Brainbox → NetBird* (oder `brainbox-connect netbird`) API-Adresse und Access Token eintragen. Danach stehen alle Geräte im Wiki – online/offline, NetBird-IP, DNS-Name, Gruppen – plus eine Liste aller **Domains** aus deinen NetBird-Netzwerken. Gerät und VM werden über gleichen Namen oder gleiche IP verknüpft.
+Unter *Einstellungen → Brainbox → NetBird* (oder `brainbox-connect netbird`) API-Adresse und Access Token eintragen. Danach stehen alle Geräte im Wiki – online/offline, NetBird-IP, DNS-Name, Gruppen – plus eine Liste aller **Domains**: vom NetBird-**Reverse-Proxy** (Reverse Proxy → Services) mit Ziel, Status und Schutz (SSO, Passwort, nur NetBird …) und aus deinen NetBird-Netzwerken. Jede Domain landet über das Ziel des Dienstes bei der richtigen VM, sonst über gleichen Namen oder gleiche IP. Für den Reverse-Proxy braucht der Token die Rolle *Admin*. Passwörter und PINs der Dienste kommen nie ins Wiki.
 
 ## 🗂️ Bereiche
 

@@ -164,7 +164,7 @@ Unter *Einstellungen → Brainbox → NetBird* oder mit `brainbox-connect netbir
 Was im Wiki entsteht (Sammlung **NetBird**):
 
 - **NetBird – Übersicht**: alle Geräte mit NetBird-IP, DNS-Name, online/offline und zugehörigem Proxmox-Gast
-- **Domains**: alle Domains aus den NetBird-Netzwerken und wozu sie gehören
+- **Domains**: alle Domains vom NetBird-Reverse-Proxy (mit Ziel, Status und Schutz) und aus den NetBird-Netzwerken, und wozu sie gehören
 - **je Gerät ein Eintrag**: Hostname, IPs, DNS-Namen, Gruppen, Betriebssystem, zuletzt gesehen
 
 **Zuordnung:**
