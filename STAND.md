@@ -60,7 +60,7 @@ _Zuletzt aktualisiert: 05.11.2026_
   - Stil „Homelab-Konsole“: dunkel als Standard, Brainbox-Grün `#118656` / `#4CD596`.
   - `brand/apply.mjs` patcht den Outline-Quellcode vor dem Bauen. Es ändert Farben, Schrift, Standard dunkel, `APP_NAME`, Logo, Favicons/PWA-Icons, MCP-Name „Brainbox“ und den Such-Titel. Dazu kommen „Brainbox-Zentrale“ und das Update-Symbol oben in der Seitenleiste.
   - Jeder Schritt meldet, ob er gegriffen hat. Fehlt ein Muster, baut Outline trotzdem.
-  - Das Wiki-Bild (Team-Avatar) ist das Brainbox-Logo (`/images/icon-192.png`, gesetzt bei `brainbox-login workspace`).
+  - Das Wiki-Bild (Team-Avatar) ist das Brainbox-Logo (`/images/brainbox-192.png`, gesetzt bei `brainbox-login workspace`; ältere `/images/icon-192.png` stellt `teile-einrichten.sh` um).
 - **Brainbox-Zentrale** (`zentrale/server.mjs` + `zentrale/app.html`, Node ohne Abhängigkeiten):
   - Lauscht auf Port 3000, der Outline-Kern auf 3100. Alles außer `/zentrale` geht an den Kern weiter, Websockets inklusive. Läuft der Kern nicht, zeigt sie „Brainbox startet gerade“.
   - Nur Admins (Prüfung über `auth.info` mit der Wiki-Sitzung). POST nur mit Kopfzeile `X-Brainbox: 1` und gleicher Herkunft.
@@ -106,6 +106,8 @@ _Zuletzt aktualisiert: 05.11.2026_
 - In dieser Sandbox geht der Browser-Websocket nur ohne `HTTPS_PROXY` (sonst steht „Offline“ unten rechts).
 
 ## Offen / nächste Schritte
+
+- **Brainbox 1.4.1** (Philip 05.11., Screenshot „Wiki-Bild“ zeigt noch Outline): Team-Avatar war `/images/icon-192.png` – Datei auf dem Server schon Brainbox, aber vom Browser zwischengespeichert. Jetzt `/images/brainbox-192.png` in `brainbox-login.sh`, Zentrale-Knopf „Brainbox-Logo“ und Anmeldeseite; `teile-einrichten.sh` stellt `…/images/icon-192.png` und leere Werte um. Getestet im Testwiki: Wert umgestellt, Zentrale und Seitenleiste laden das neue Bild, keine Seitenfehler.
 
 - **Brainbox 1.4.0 – eigene Symbole** (Philip 05.11.: „die icons sind immer noch die alten von outline“, Wahl: alle Symbole neu):
   - **Symbolsatz:** `brand/symbole/zuordnung.mjs` ordnet allen 176 Symbolen aus `outline-icons` 4.6.0 eine Form aus Phosphor Icons 2.1.1 (MIT, Stil regular) zu. `erzeugen.mjs` baut daraus `brand/overrides/app/components/Icons/BrainboxIconSet.tsx` (gleiche Schnittstelle: `color`, `size`, `expanded`/`open`/`checked`/`outline`, `forwardRef`, Grundform `Icon`). `apply.mjs` legt sie an und setzt in `vite.config.mts` den Alias `"outline-icons"` → diese Datei. Damit wechseln Seitenleiste, Menüs, Editor und die Sammlungs-Symbole. Formen gefüllt (wie bisher), damit CSS-`fill` weiter greift; Rand im viewBox (`-16 -16 288 288`), damit die Größe passt. Jedes Symbol trägt `data-brainbox-icon`.

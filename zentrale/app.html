@@ -738,7 +738,7 @@ html.embed, html.embed body { height: auto; background: transparent; }
       return;
     }
     const logo = e.target.closest("[data-team-logo]");
-    if (logo) { guard(() => saveTeam({ avatarUrl: "/images/icon-192.png" }, "Brainbox-Logo gesetzt"), logo); return; }
+    if (logo) { guard(() => saveTeam({ avatarUrl: "/images/brainbox-192.png" }, "Brainbox-Logo gesetzt"), logo); return; }
     const clr = e.target.closest("[data-user-avatar-clear]");
     if (clr) { guard(() => saveUser({ avatarUrl: null }, "Bild entfernt"), clr); return; }
     const ua = e.target.closest("[data-user-act]");

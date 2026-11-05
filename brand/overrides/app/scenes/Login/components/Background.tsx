@@ -16,7 +16,7 @@ export function Background({ children }: Props) {
   return (
     <Shell>
       <Brand aria-hidden>
-        <Mark src="/images/icon-192.png" alt="" width={44} height={44} />
+        <Mark src="/images/brainbox-192.png" alt="" width={44} height={44} />
         <Name>Brainbox</Name>
         <Tagline>Dein Wiki fürs Homelab</Tagline>
         <Points>

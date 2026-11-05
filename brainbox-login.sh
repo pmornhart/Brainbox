@@ -131,7 +131,7 @@ create_workspace() { # create_workspace <Wiki-Name> <Admin-Name> <Admin-E-Mail>
   # Microsoft oder Discord jedes Konto selbst als Mitglied anmelden).
   # Dazu das Brainbox-Logo als Bild des Wikis (änderbar unter Einstellungen → Details).
   code="$(curl -sS -c "$jar" -b "$jar" -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
-    -H "x-csrf-token: ${csrf}" --data '{"inviteRequired":true,"avatarUrl":"/images/icon-192.png"}' "http://127.0.0.1:${PORT}/api/team.update" || true)"
+    -H "x-csrf-token: ${csrf}" --data '{"inviteRequired":true,"avatarUrl":"/images/brainbox-192.png"}' "http://127.0.0.1:${PORT}/api/team.update" || true)"
   rm -f "$jar"
   if [[ "$code" == "200" ]]; then
     ok "Nur eingeladene Personen kommen rein (Einstellungen → Sicherheit → Einladungen erforderlich)"

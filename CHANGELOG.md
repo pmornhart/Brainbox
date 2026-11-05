@@ -2,6 +2,10 @@
 
 Brainbox hat eigene Versionen. Der Kern (Outline) ist je Version fest getestet und steht dabei.
 
+## 1.4.1 – 05.11.2026 · Kern: Outline v1.12.0
+
+- **Wiki-Bild unter neuem Namen:** Das Brainbox-Logo als Wiki-Bild (Seitenleiste, Anmeldeseite, *Einstellungen → Allgemein*) liegt jetzt unter `/images/brainbox-192.png`. Unter dem alten Namen zeigten Browser oft noch das Outline-Bild aus dem Zwischenspeicher. Das Update stellt ein gesetztes Brainbox-Logo automatisch um; eigene Bilder bleiben
+
 ## 1.4.0 – 05.11.2026 · Kern: Outline v1.12.0
 
 Eigene Symbole – von Outline ist nichts mehr zu sehen.
