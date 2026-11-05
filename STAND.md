@@ -1,8 +1,58 @@
 # Stand
 
-_Zuletzt aktualisiert: 04.11.2026_
+_Zuletzt aktualisiert: 05.11.2026_
 
 ## Fertig
+
+- **Überarbeitung Schritt für Schritt** (Philips Wunsch: „genauso wie die Einstellungen mit Proxmox … alles von Outline überarbeiten“):
+  - **Schritt 1 fertig: Wiki- und Konto-Einstellungen** im Stil der Zentrale (gehört noch zu 1.1.0, weil 1.1.0 nicht auf `main` ist).
+    - Alle 14 Einstellungsseiten kommen jetzt aus `zentrale/app.html` (eingebettet per iframe). `Settings/Brainbox.tsx` hat die Liste `zentralePages` mit Gruppe und Recht (`admin`, `listUsers`, `readTemplate`, `createExport`, `all`).
+    - Neue Seiten: Allgemein, Mitglieder, Sicherheit, Vorlagen, Export, Profil, Darstellung, Benachrichtigungen. Sie sprechen die Wiki-API direkt an (gleiche Herkunft, Cookie plus `x-csrf-token`).
+    - Mitglieder sehen nur die Wiki- und Konto-Seiten; die Brainbox-Seiten zeigen ohne Admin die Sperre.
+    - Getestet im Testwiki: alle Seiten ohne Fehler, Einladen, Rolle ändern, Freigaben, Beispiel-Vorlagen, Export mit Download, Benachrichtigungen. Demo zeigt die neuen Seiten.
+  - **Konto unter dem Namen** (Philips Wunsch 05.11.: „die Kontoeinstellungen soll man sehen, wenn man auf seinen Namen unten geht“):
+    - `brand/overrides/app/menus/AccountMenu.tsx` ersetzt das Menü unten links: Gruppe „Konto“ (Profil, Darstellung, Benachrichtigungen, Passkeys mit Symbol), dann Farbschema, Einstellungen (nur Admins), Anleitung, Tastaturkürzel, Neuigkeiten, Problem melden, Abmelden.
+    - Die Konto-Gruppe bleibt zusätzlich in der Einstellungs-Liste, damit man dort sieht, wo man ist.
+    - Demo: Klick auf den Namen öffnet dasselbe Menü (Desktop und Handy geprüft). Anleitung und Spickzettel erwähnen es.
+    - Getestet im Testwiki: Menü zeigt die Gruppe „Konto“, Klick auf „Benachrichtigungen“ öffnet `/settings/notifications`, keine Seitenfehler.
+  - **Nächste Schritte (Vorschlag):** Sammlungs-Seiten (Kopf mit Beschreibung und Kacheln), Suche, Dokument-Kopf und Teilen-Dialog, Archiv und Papierkorb, Passkeys-Seite.
+
+- **Brainbox 1.1.0 – aufgeräumt** (Philips Wunsch 04.11. abends: „nicht mehr erkennen, dass es Outline ist“, Einstellungen ausmisten, Anleitung im Wiki):
+  - Ganze Dateien kommen jetzt aus `brand/overrides/`. Ersetzt wird nur, wenn ein Kennzeichen der erwarteten Fassung drinsteht.
+    Neu angelegt werden `BrainboxDashboard`, `Settings/Brainbox.tsx`, `BrainboxVersion`, `BrainboxUpdateLink` und `utils/brainbox.ts`.
+  - **Einstellungen** (`useSettingsConfig.ts`) haben drei Gruppen:
+    - *Brainbox*: Zentrale per iframe `/zentrale?embed=1&theme=…`, Navigation per `postMessage`
+    - *Wiki*: Allgemein, Mitglieder, Sicherheit, Vorlagen, Export
+    - *Konto*: Profil, Darstellung, Benachrichtigungen, Passkeys
+    - Plugins: nur Passkeys. `/zentrale` ohne `embed` leitet nach `/settings/brainbox-…` weiter.
+  - **Startseite** (`Home.tsx` und `BrainboxDashboard.tsx`) zeigt Begrüßung, Kacheln und Schnellzugriffe. Die Daten kommen von `/zentrale/api/summary` (für alle Mitglieder, ohne Geheimnisse).
+  - **Anmeldeseite** (`Login/components/Background.tsx`): Markenleiste links, auf dem Handy oben.
+  - **Seitenleiste**:
+    - Überschriften in Konsole-Schrift, Markierung der aktiven Seite
+    - „Einstellungen“ und „Update verfügbar“ oben
+    - Adresse unter dem Wiki-Namen
+    - kein Import-Hinweis
+  - **Keine Outline-Spuren**:
+    - UrlHelper, Hilfe-Menü (Anleitung, Neuigkeiten, Problem melden), App-Manifest, Willkommens-Mail, Freigabe-Seiten, Übersetzungen (de/en)
+    - Seitentitel „Mitglieder“ und „Darstellung“
+    - Terminal-Meldungen ohne „Outline“
+    - Geprüft: kein „Outline“ im sichtbaren Text der Hauptseiten.
+  - **Anleitung**:
+    - `wiki/anleitung.md` und `wiki/spickzettel.md` landen in der Sammlung „Start“ (`connect/sync.mjs` → `ensureStart`).
+    - Platzhalter `{{proxmox}}` usw. füllt der Abgleich mit den echten Links.
+    - Selbst bearbeitete Seiten bleiben, erkannt am Hash nach dem Schreiben.
+  - **`brainbox-connect start`** (rufen Installation und Update auf):
+    - richtet Bot und Zeitplan ein, gleicht ab
+    - sortiert die Sammlungen einmalig: Start, Bereiche, Proxmox, NetBird, Von Claude (Flag in `/var/lib/brainbox/sammlungen-sortiert`)
+    - Der Abgleich läuft auch ohne Proxmox und NetBird; dann pflegt er nur die Anleitung.
+  - Kurzlinks `/zentrale/go/anleitung|spickzettel|proxmox|netbird|bereiche|regeln|domains`.
+  - Server-Karten in den Einstellungen zeigen, ob der Server erreichbar ist und wie viele VMs/Container er hat. Mit „Im Wiki“ geht es direkt zur Server-Seite, ebenso bei NetBird zur Übersicht.
+  - Getestet am 05.11.: frische Installation ohne Proxmox. Die Anleitung liegt in „Start“, die Startseite zeigt den Hinweis „Bring dein Homelab ins Wiki“, und neue Nutzer landen zuerst in „Start“.
+  - Getestet am 05.11.:
+    - Update 1.0.0 → 1.1.0 im Testcontainer, zweimal `update --force`
+    - Screenshots von Desktop, Handy und Login
+    - kein Seitenfehler, Kurzlink geht, `/zentrale#proxmox` leitet weiter
+    - Live-Demo neu aufgebaut: Einstellungen mit eingebetteter Zentrale, Startseite, Update zum Durchspielen
 
 - **Brainbox 1.0.0 – eigenständig** (Philips Wunsch: „Kern von Outline, alles drumherum von mir“):
   - Eigene Versionen in `brainbox.version` (`BRAINBOX_VERSION=1.0.0`, `OUTLINE_CORE=v1.12.0`, fest getesteter Kern), `CHANGELOG.md`.
@@ -57,6 +107,13 @@ _Zuletzt aktualisiert: 04.11.2026_
 
 ## Offen / nächste Schritte
 
+- Erledigt 05.11.2026: Brainbox 1.1.0 nach `main` übernommen (Philip: „bring mal das update raus“). Installationen zeigen innerhalb von 6 Std. „Update verfügbar · 1.1.0“, sofort mit `update` im Container.
+- Behoben 05.11.: Philip sah „Nur für Admins“, obwohl sein Konto Admin ist (per MCP geprüft).
+  - Ursache: Die Zentrale verglich bei Aktionen die Herkunft (`Origin`) nur mit der `Host`-Kopfzeile. Schreibt der Reverse-Proxy `Host` auf die interne IP um, kam 403, und die Seite zeigte jede 403 als „Nur für Admins“.
+  - Lösung: `ownHosts()` nimmt auch den Host aus `URL=` der `.env` (Standard-Ports gleich). `app.html` zeigt „Nur für Admins“ nur bei `error: "admin"`, sonst die echte Meldung. Kaputt kodierte fremde Cookies werfen nicht mehr.
+  - Nachgestellt im Testcontainer mit umgeschriebenem Host: vorher 403, nachher 200; fremde Herkunft weiter 403.
+  - Für Philip: einmal `update` im Container (der Knopf in 1.0.0 hat denselben Fehler), danach geht alles im Browser.
+- Der Tag `v1.0.0` ließ sich aus der Cloud nicht pushen (403). Philip kann ihn bei Bedarf auf GitHub als Release anlegen.
 - Erledigt 04.11.2026: Brainbox 1.0.0 nach `main` übernommen, Tag `v1.0.0`. Ab jetzt zeigen Installationen „Update verfügbar“, sobald `brainbox.version` auf `main` hochgezählt wird.
 - Für ein Update an Philips Installationen: Änderung auf `main`, `BRAINBOX_VERSION` erhöhen, `CHANGELOG.md` ergänzen, Tag setzen.
 - Philip: Reverse-Proxy für `brainbox.morncloud.de` → `http://<IP>:3000` mit Websockets, Postfach für Login-Mails, Google-OAuth-Client und Microsoft-App-Registrierung anlegen.

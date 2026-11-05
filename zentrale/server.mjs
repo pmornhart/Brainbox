@@ -57,8 +57,22 @@ const send = (res, code, body, type = "application/json; charset=utf-8") => {
   res.end(data);
 };
 const cookies = (req) => Object.fromEntries(String(req.headers.cookie || "").split(/;\s*/).filter(Boolean).map((c) => {
-  const i = c.indexOf("="); return [c.slice(0, i), decodeURIComponent(c.slice(i + 1))];
+  const i = c.indexOf("="); const raw = c.slice(i + 1);
+  let value = raw;
+  try { value = decodeURIComponent(raw); } catch { /* fremdes Cookie (z. B. anderer Dienst der Domain) mit eigener Kodierung */ }
+  return [c.slice(0, i), value];
 }));
+
+// Eigene Adresse(n) der Brainbox: die Host-Kopfzeile und die Wiki-Adresse aus der .env.
+// Viele Reverse-Proxys schreiben Host auf die interne IP um – dann zählt die Wiki-Adresse.
+// Standard-Ports zählen nicht mit (brainbox.example.org:443 = brainbox.example.org).
+const hostKey = (h) => String(h || "").trim().toLowerCase().replace(/:(80|443)$/, "");
+function ownHosts(req) {
+  const hosts = new Set([hostKey(req.headers.host)]);
+  try { hosts.add(hostKey(new URL(readEnv(ENV_FILE).URL).host)); } catch { /* keine Adresse eingetragen */ }
+  hosts.delete("");
+  return [...hosts];
+}
 
 function run(cmd, args, { timeout = 240000, input } = {}) {
   return new Promise((resolve) => {
@@ -107,9 +121,9 @@ async function checkUpdate() {
   return updateState();
 }
 function updateText(u) {
-  if (u.available) return `Update verfügbar: Brainbox ${u.current} → ${u.latest}${u.latestCore && u.latestCore !== u.currentCore ? ` (Kern: Outline ${u.currentCore} → ${u.latestCore})` : ""}`;
+  if (u.available) return `Update verfügbar: Brainbox ${u.current} → ${u.latest}${u.latestCore && u.latestCore !== u.currentCore ? ` (Kern ${u.currentCore} → ${u.latestCore})` : ""}`;
   if (u.error) return `Prüfen hat nicht geklappt: ${u.error}`;
-  return `Brainbox ${u.current} ist aktuell (Kern: Outline ${u.currentCore}).`;
+  return `Brainbox ${u.current} ist aktuell (Kern ${u.currentCore}).`;
 }
 
 // --- Outline-Kern fragen (mit der Sitzung des Nutzers) -------------------------------------------
@@ -167,8 +181,13 @@ async function status(req, me) {
     ctid: (() => { try { return fs.readFileSync(path.join(CONF_DIR, "ctid"), "utf8").trim(); } catch { return ""; } })(),
     wiki: { url, name: me?.team?.name || "Brainbox", inviteRequired: !!me?.team?.inviteRequired, language: env.DEFAULT_LANGUAGE || "" },
     user: { name: me?.user?.name || "" },
-    proxmox: (servers || []).map((x) => ({ name: x.name, url: x.url, tokenId: x.tokenId, insecure: !!x.insecure })),
-    netbird: conn.NETBIRD_URL ? { url: conn.NETBIRD_URL } : null,
+    proxmox: (servers || []).map((x) => ({
+      name: x.name, url: x.url, tokenId: x.tokenId, insecure: !!x.insecure,
+      wikiUrl: state.docs?.[`pvesrv:${x.name}`]?.url || null,
+      online: state.summary?.proxmox?.servers?.find((y) => y.name === x.name)?.ok ?? null,
+      guests: state.summary?.proxmox?.servers?.find((y) => y.name === x.name)?.guests ?? null,
+    })),
+    netbird: conn.NETBIRD_URL ? { url: conn.NETBIRD_URL, wikiUrl: state.docs?.["nb:overview"]?.url || null } : null,
     claude: { account: claude, email: claudeMail, mcpUrl: `${url}/mcp`, key: !!conn.CLAUDE_API_KEY },
     sync: {
       lastRun: state.lastRun || null, timer: timer.output.trim() === "active", bot: !!conn.OUTLINE_API_KEY,
@@ -179,13 +198,45 @@ async function status(req, me) {
       },
       areas,
       rulesUrl: state.docs?.["area:rules"]?.url || null,
+      areasUrl: state.docs?.["area:overview"]?.url || null,
       overviewUrl: state.docs?.["pve:overview"]?.url || null,
+      guideUrl: state.docs?.["start:anleitung"]?.url || null,
     },
     login: {
       email: env.SMTP_HOST || env.SMTP_SERVICE || "",
       passkeys: url.startsWith("https://"),
       google: !!env.GOOGLE_CLIENT_ID, microsoft: !!env.AZURE_CLIENT_ID, discord: !!env.DISCORD_CLIENT_ID,
       oidc: env.OIDC_CLIENT_ID ? (env.OIDC_DISPLAY_NAME || "OpenID Connect") : "",
+    },
+  };
+}
+
+// --- Für die Startseite des Wikis und Kurzlinks -------------------------------------------------------
+// Kurzlinks wie /zentrale/go/anleitung führen zur passenden Wiki-Seite (vom Abgleich angelegt).
+const GO = {
+  anleitung: "start:anleitung", spickzettel: "start:spickzettel", proxmox: "pve:overview", netbird: "nb:overview",
+  domains: "nb:domains", bereiche: "area:overview", regeln: "area:rules",
+};
+function goTo(res, key) {
+  const docKey = GO[key];
+  const docUrl = docKey ? readJson(STATE_FILE, {}).docs?.[docKey]?.url : null;
+  res.writeHead(302, { Location: docUrl || "/home", "Cache-Control": "no-store" });
+  res.end();
+}
+function summary(me) {
+  const state = readJson(STATE_FILE, {});
+  const docUrl = (k) => state.docs?.[k]?.url || null;
+  const admin = me.user?.role === "admin";
+  return {
+    user: { name: me.user?.name || "", admin },
+    wiki: { name: me.team?.name || "Brainbox" },
+    version: versionInfo(),
+    update: admin ? updateState() : null,
+    lastRun: state.lastRun || null,
+    homelab: state.summary || null,
+    links: {
+      anleitung: docUrl("start:anleitung"), spickzettel: docUrl("start:spickzettel"), proxmox: docUrl("pve:overview"),
+      netbird: docUrl("nb:overview"), domains: docUrl("nb:domains"), bereiche: docUrl("area:overview"), regeln: docUrl("area:rules"),
     },
   };
 }
@@ -252,19 +303,30 @@ async function zentrale(req, res) {
     const [file, type] = STATIC[url.pathname];
     try { return send(res, 200, fs.readFileSync(file), type); } catch { return send(res, 404, "fehlt", "text/plain"); }
   }
+  if (url.pathname.startsWith("/zentrale/go/")) return goTo(res, url.pathname.slice("/zentrale/go/".length));
   if (!url.pathname.startsWith("/zentrale/api/")) return send(res, 404, { error: "Nicht gefunden" });
 
   const me = await whoami(req);
   if (!me) return send(res, 401, { error: "login" });
-  if (me.user?.role !== "admin") return send(res, 403, { error: "admin" });
   const name = url.pathname.slice("/zentrale/api/".length);
+  // Für alle Mitglieder: Zusammenfassung für die Startseite (ohne Geheimnisse)
+  if (req.method === "GET" && name === "summary") return send(res, 200, summary(me));
+  if (me.user?.role !== "admin") return send(res, 403, { error: "admin" });
   if (req.method === "GET" && name === "status") return send(res, 200, await status(req, me));
   if (req.method === "GET" && name === "update-info") return send(res, 200, updateState());
   if (req.method !== "POST" || !actions[name]) return send(res, 404, { error: "Nicht gefunden" });
 
   // Schutz gegen fremde Seiten: eigener Kopfzeilen-Eintrag und gleiche Herkunft
+  if (req.headers["x-brainbox"] !== "1") return send(res, 403, { error: "Herkunft", message: "Abgelehnt: Die Anfrage kam nicht von der Brainbox-Seite." });
   const origin = req.headers.origin;
-  if (req.headers["x-brainbox"] !== "1" || (origin && new URL(origin).host !== req.headers.host)) return send(res, 403, { error: "Herkunft" });
+  if (origin) {
+    let from = "";
+    try { from = hostKey(new URL(origin).host); } catch { /* unlesbar */ }
+    const own = ownHosts(req);
+    if (!own.includes(from)) {
+      return send(res, 403, { error: "Herkunft", message: `Abgelehnt: Die Seite läuft unter ${from || origin}, die Brainbox kennt sich als ${own.join(" bzw. ") || "?"}. Wiki-Adresse mit „brainbox-login“ prüfen.` });
+    }
+  }
   const chunks = [];
   for await (const c of req) { chunks.push(c); if (chunks.reduce((n, x) => n + x.length, 0) > 64 * 1024) return send(res, 413, { error: "zu groß" }); }
   let body = {};

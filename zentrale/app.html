@@ -116,9 +116,49 @@ details.form[open] { background: var(--panel2); border-radius: 10px; padding: 12
 .banner { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, var(--panel)), var(--panel) 60%); }
 .banner .ico { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); flex: none; }
 .banner .ico svg { width: 20px; height: 20px; }
+/* Einstellungen: Zeilen mit Schalter oder Auswahl */
+.setrow { display: flex; align-items: center; gap: 16px; padding: 12px 0; border-top: 1px solid var(--line); }
+.card > h2 + .setrow { border-top: 0; }
+.setrow b { display: block; font-weight: 500; }
+.setrow small { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }
+.setrow .ctl { flex: none; }
+.setrow select, .member select { width: auto; min-width: 150px; }
+.switch { position: relative; width: 38px; height: 22px; border-radius: 999px; border: 0; background: var(--line); cursor: pointer; flex: none; padding: 0; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; }
+.switch[aria-checked="true"] { background: var(--accent-strong); }
+.switch[aria-checked="true"]::after { left: 19px; }
+.switch[disabled] { opacity: .5; cursor: progress; }
+.ava { width: 32px; height: 32px; border-radius: 50%; display: inline-grid; place-items: center; color: #fff; font-weight: 600; font-size: 14px; flex: none; object-fit: cover; }
+.ava.big { width: 52px; height: 52px; border-radius: 14px; font-size: 22px; }
+.filebtn { display: inline-flex; align-items: center; }
+.members { display: grid; }
+.member { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.member:first-child { border-top: 0; }
+.member b { font-weight: 500; }
+.member .meta { color: var(--muted); font: 12.5px var(--mono); overflow-wrap: anywhere; }
+.member .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.tmpl:hover { border-color: var(--faint); }
+.dot.bad { background: var(--bad); }
+.setrow > .grow { flex: 1 1 auto; min-width: 0; }
+/* Erst auf Handy-Breite umbrechen – eingebettet ist die Seite schmaler als das Fenster */
+@media (max-width: 560px) {
+  .setrow { flex-wrap: wrap; }
+  .member { grid-template-columns: auto minmax(0, 1fr); }
+  .member .status, .member .acts { grid-column: 2; justify-content: flex-start; }
+  form.grid { grid-template-columns: minmax(0, 1fr); }
+  .server { grid-template-columns: auto minmax(0, 1fr); }
+  .server .acts { grid-column: 1 / -1; justify-content: flex-start; }
+}
 .empty { color: var(--muted); padding: 18px; text-align: center; border: 1px dashed var(--line); border-radius: 12px; }
 .topbar { display: none; }
 .toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 9px 14px; border-radius: 8px; font-size: 14px; z-index: 30; max-width: calc(100% - 32px); }
+/* Eingebettet in die Einstellungen des Wikis: ohne eigene Seitenleiste und Überschrift */
+html.embed, html.embed body { height: auto; background: transparent; }
+.shell.embed { display: block; background: none; min-height: 0; }
+.shell.embed .rail { display: none; }
+.shell.embed main { padding: 2px 0 28px; }
+.shell.embed .wrap { max-width: none; margin: 0; }
+.shell.embed .phead .kicker, .shell.embed .phead h1 { display: none; }
 .gate { min-height: 100%; display: grid; place-items: center; padding: 24px; text-align: center; }
 .gate .box { max-width: 420px; display: grid; gap: 12px; justify-items: center; }
 
@@ -133,15 +173,25 @@ details.form[open] { background: var(--panel2); border-radius: 10px; padding: 12
   .rail .foot .hint { display: none; }
   .back { padding: 6px 10px; font-size: 13px; }
   main { padding: 18px 16px 70px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-  form.grid { grid-template-columns: minmax(0, 1fr); }
-  .server { grid-template-columns: auto minmax(0, 1fr); }
-  .server .acts { grid-column: 1 / -1; justify-content: flex-start; }
   h1 { font-size: 1.55rem; }
 }
 </style>
 <script>
-// Gleiches Farbschema wie im Wiki: dunkel, außer dort ist „Hell“ oder „System“ eingestellt
-try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "light" || t === "system") document.documentElement.dataset.theme = t; } catch (e) { /* bleibt dunkel */ }
+// Die Zentrale wohnt in den Einstellungen des Wikis (Einstellungen → Brainbox) und wird
+// dort mit ?embed=1 eingebettet. Wer /zentrale direkt aufruft, landet auf der passenden Seite.
+(function () {
+  var q = new URLSearchParams(location.search);
+  if (q.get("embed") === "1") {
+    document.documentElement.classList.add("embed");
+    if (q.get("theme") === "light") document.documentElement.dataset.theme = "light";
+    return;
+  }
+  var map = { uebersicht: "brainbox", proxmox: "brainbox-proxmox", netbird: "brainbox-netbird", claude: "brainbox-claude", anmeldung: "brainbox-anmeldung", update: "brainbox-update",
+    allgemein: "details", mitglieder: "users", sicherheit: "security", vorlagen: "templates", export: "export", profil: "", darstellung: "preferences", benachrichtigungen: "notifications" };
+  window.BRAINBOX_REDIRECT = true;
+  var target = map[location.hash.slice(1)];
+  location.replace("/settings/" + (target === undefined ? "brainbox" : target));
+})();
 </script>
 </head>
 <body>
@@ -151,8 +201,12 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
 (function () {
   "use strict";
   // In der Demo läuft die Zentrale in einem Shadow-Root ohne eigene Adresszeile
+  if (window.BRAINBOX_REDIRECT) return;
   const ROOT = window.BRAINBOX_ROOT || document;
   const USE_HASH = !window.BRAINBOX_ROOT;
+  // Eingebettet: im Wiki (iframe) oder in der Demo. Seitenwechsel und Links übernimmt dann das Wiki.
+  const EMBED = !!window.BRAINBOX_EMBED || document.documentElement.classList.contains("embed");
+  const NAV_OUT = window.BRAINBOX_NAVIGATE || (EMBED && window.parent !== window ? (msg) => window.parent.postMessage(msg, location.origin) : null);
   const LOGO = window.BRAINBOX_LOGO || "/zentrale/logo.svg";
   const $ = (s, r = ROOT) => r.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -166,7 +220,12 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
       { method: "POST", headers: { "Content-Type": "application/json", "X-Brainbox": "1" }, body: JSON.stringify(body) };
     const r = await fetch(`/zentrale/api/${name}`, { credentials: "same-origin", ...opt });
     if (r.status === 401) throw Object.assign(new Error("login"), { gate: "login" });
-    if (r.status === 403) throw Object.assign(new Error("admin"), { gate: "admin" });
+    if (r.status === 403) {
+      // „Nur für Admins“ nur, wenn es wirklich an der Rolle liegt – sonst die echte Meldung zeigen
+      const j = await r.json().catch(() => ({}));
+      if (j.error === "admin") throw Object.assign(new Error("admin"), { gate: "admin" });
+      throw new Error(j.message || "Abgelehnt.");
+    }
     return r.json();
   }
   let tt;
@@ -192,7 +251,7 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
   };
 
   function shell(content) {
-    $("#app").innerHTML = `<div class="shell">
+    $("#app").innerHTML = `<div class="shell${EMBED ? " embed" : ""}">
       <nav class="rail" aria-label="Zentrale">
         <div class="brand"><img src="${LOGO}" alt=""><div><b>Brainbox-Zentrale</b><small>${esc(S ? `v${S.version.brainbox}` : "")}${hasUpdate() ? " · Update da" : ""}</small></div></div>
         <div class="nav">${NAV.map(([k, l]) => `<button type="button" data-go="${k}" ${view === k ? 'aria-current="page"' : ""}>${esc(l)}${navDot(k)}</button>`).join("")}</div>
@@ -202,28 +261,33 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
     </div>`;
   }
   function go(k) {
+    if (NAV_OUT && k !== view) {
+      if (k === "bereiche") { NAV_OUT({ type: "brainbox:open", href: S.sync.areasUrl || S.sync.rulesUrl || "/home" }); return; }
+      NAV_OUT({ type: "brainbox:go", page: k });
+      return;
+    }
     view = k;
     if (USE_HASH) { try { history.replaceState(null, "", `#${k}`); } catch (e) { /* egal */ } }
     render();
     const m = $("main"); if (m && m.scrollTo) m.scrollTo(0, 0); window.scrollTo(0, 0);
   }
-  window.BRAINBOX_GO = go;
+  window.BRAINBOX_GO = (k) => { view = k; render(); };
 
   // --- Seiten ---
   function pUebersicht() {
     const c = S.sync.counts;
     const ways = 1 + ["email", "google", "microsoft", "discord", "oidc"].filter((k) => S.login[k]).length + (S.login.passkeys ? 1 : 0);
     const tile = (k, dot, label, value, sub) => `<button type="button" class="tile" data-go="${k}"><span class="k"><span class="dot ${dot}"></span>${esc(label)}</span><span class="v">${esc(value)}</span><span class="s">${esc(sub)}</span></button>`;
-    return `<div><div class="kicker">${esc(S.wiki.name)} · ${esc(S.wiki.url.replace(/^https?:\/\//, ""))}</div><h1>Übersicht</h1>
+    return `<div class="phead"><div class="kicker">${esc(S.wiki.name)} · ${esc(S.wiki.url.replace(/^https?:\/\//, ""))}</div><h1>Übersicht</h1>
       <p class="lede">Hier steuerst du alles rund um dein Wiki: welche Proxmox-Server und welches NetBird drin stehen, ob Claude mitschreiben darf, wie man sich anmeldet und welche Version läuft.</p></div>
       ${hasUpdate() ? updateBanner() : ""}
       <div class="tiles">
         ${tile("proxmox", S.proxmox.length ? "ok" : "", "Proxmox-Server", String(S.proxmox.length), S.proxmox.length ? `${c.guests} VMs und Container im Wiki` : "noch keiner verbunden")}
         ${tile("netbird", S.netbird ? "ok" : "", "NetBird", S.netbird ? "verbunden" : "aus", S.netbird ? `${c.peers} Geräte im Wiki` : "Geräte und Domains ins Wiki holen")}
         ${tile("claude", S.claude.account ? "ok" : "", "Claude", S.claude.account ? "eigenes Konto" : "aus", S.claude.account ? "schreibt über MCP mit" : "Claude mitschreiben lassen")}
-        ${tile("bereiche", c.areas ? "ok" : "", "Bereiche", String(c.areas), c.areas ? "per Zuordnungsregeln sortiert" : "z. B. Minecraft-Server")}
+        ${tile("bereiche", c.areas ? "ok" : "", "Bereiche", String(S.sync.areas.filter((x) => !x.includes("/")).length), c.areas ? (c.areas > S.sync.areas.filter((x) => !x.includes("/")).length ? `mit ${c.areas - S.sync.areas.filter((x) => !x.includes("/")).length} Unterbereichen` : "per Zuordnungsregeln sortiert") : "z. B. Minecraft-Server")}
         ${tile("anmeldung", "ok", "Anmeldung", String(ways), ways === 1 ? "Weg zum Einloggen aktiv" : "Wege zum Einloggen aktiv")}
-        ${tile("update", hasUpdate() ? "warn" : "ok", "Version", `v${S.version.brainbox}`, hasUpdate() ? `Update auf v${S.update.latest} verfügbar` : `Kern: Outline ${S.version.core}`)}
+        ${tile("update", hasUpdate() ? "warn" : "ok", "Version", `v${S.version.brainbox}`, hasUpdate() ? `Update auf v${S.update.latest} verfügbar` : `Kern ${S.version.core.replace(/^v/, "")}`)}
       </div>
       <div class="card"><div class="row"><span class="dot ${S.sync.timer ? "ok" : "warn"}"></span><div class="grow"><b>Abgleich</b><div class="hint">Zuletzt ${esc(ago(S.sync.lastRun))} · ${S.sync.timer ? "läuft automatisch alle 5 Minuten" : "Zeitplan aus – startet, sobald Proxmox oder NetBird verbunden ist"}</div></div>
         <button type="button" class="btn" data-act="sync">Jetzt abgleichen</button></div><pre class="out" id="out-sync" hidden></pre></div>
@@ -233,11 +297,11 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
 
   function pProxmox() {
     const list = S.proxmox.length ? S.proxmox.map((x) => `<div class="server">
-        <span class="dot ok"></span>
-        <div><b>${esc(x.name)}</b><div class="meta">${esc(x.url)} · ${esc(x.tokenId)}${x.insecure ? " · Zertifikat ungeprüft" : ""}</div></div>
-        <div class="acts"><button type="button" class="btn small" data-act="proxmox/test" data-name="${esc(x.name)}">Prüfen</button><button type="button" class="btn small danger" data-act="proxmox/remove" data-name="${esc(x.name)}">Entfernen</button></div>
+        <span class="dot ${x.online === false ? "warn" : "ok"}"></span>
+        <div><b>${esc(x.name)}</b><div class="meta">${esc(x.url)} · ${esc(x.tokenId)}${x.insecure ? " · Zertifikat ungeprüft" : ""}${x.guests != null ? ` · ${x.guests} VMs/Container` : ""}${x.online === false ? " · gerade nicht erreichbar" : ""}</div></div>
+        <div class="acts">${x.wikiUrl ? `<a class="btn small" href="${esc(x.wikiUrl)}" style="text-decoration:none">Im Wiki</a>` : ""}<button type="button" class="btn small" data-act="proxmox/test" data-name="${esc(x.name)}">Prüfen</button><button type="button" class="btn small danger" data-act="proxmox/remove" data-name="${esc(x.name)}">Entfernen</button></div>
       </div>`).join("") : `<div class="empty">Noch kein Proxmox-Server verbunden. Leg unten den ersten an.</div>`;
-    return `<div><div class="kicker">Verbindungen</div><h1>Proxmox-Server</h1>
+    return `<div class="phead"><div class="kicker">Verbindungen</div><h1>Proxmox-Server</h1>
       <p class="lede">Verbinde beliebig viele Proxmox-Server oder Cluster. Jeder bekommt im Wiki eine eigene Seite mit Nodes und Auslastung, darunter je VM und Container ein Eintrag. Neue VMs erscheinen nach spätestens 5 Minuten, gelöschte werden archiviert. Brainbox liest Proxmox nur, ändert dort nichts.</p></div>
       <div class="list">${list}</div><pre class="out" id="out-proxmox" hidden></pre>
       <div class="card"><h2>Proxmox-Server hinzufügen</h2>
@@ -260,10 +324,10 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
   }
 
   function pNetbird() {
-    return `<div><div class="kicker">Verbindungen</div><h1>NetBird</h1>
+    return `<div class="phead"><div class="kicker">Verbindungen</div><h1>NetBird</h1>
       <p class="lede">Holt alle NetBird-Geräte, Netzwerke und Domains ins Wiki und verknüpft sie mit den passenden VMs – über gleichen Namen oder gleiche IP.</p></div>
       ${S.netbird ? `<div class="server"><span class="dot ok"></span><div><b>Verbunden</b><div class="meta">${esc(S.netbird.url)} · ${S.sync.counts.peers} Geräte im Wiki</div></div>
-        <div class="acts"><button type="button" class="btn small danger" data-act="netbird/remove">Trennen</button></div></div>` : ""}
+        <div class="acts">${S.netbird.wikiUrl ? `<a class="btn small" href="${esc(S.netbird.wikiUrl)}" style="text-decoration:none">Im Wiki</a>` : ""}<button type="button" class="btn small danger" data-act="netbird/remove">Trennen</button></div></div>` : ""}
       <pre class="out" id="out-netbird" hidden></pre>
       <div class="card"><h2>${S.netbird ? "Zugang ändern" : "NetBird verbinden"}</h2>
         <ol class="steps">
@@ -279,14 +343,14 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
   }
 
   function pClaude() {
-    return `<div><div class="kicker">Verbindungen</div><h1>Claude</h1>
+    return `<div class="phead"><div class="kicker">Verbindungen</div><h1>Claude</h1>
       <p class="lede">Claude bekommt ein eigenes Konto im Wiki und verbindet sich über den eingebauten MCP-Anschluss. Was Claude schreibt, steht unter „Claude“ – du siehst immer, was von wem ist, und kannst Claude jederzeit sperren.</p></div>
       <div class="server"><span class="dot ${S.claude.account ? "ok" : ""}"></span><div><b>${S.claude.account ? "Konto eingerichtet" : "Noch nicht eingerichtet"}</b><div class="meta">${esc(S.claude.email)} · MCP: ${esc(S.claude.mcpUrl)}</div></div>
         <div class="acts"><button type="button" class="btn small primary" data-act="claude">${S.claude.account ? "Schlüssel & Anleitung zeigen" : "Claude einrichten"}</button></div></div>
       <div id="claude-result"></div><pre class="out" id="out-claude" hidden></pre>
       <div class="card"><h2>Was beim Einrichten passiert</h2>
         <ol class="steps">
-          <li><div><b>Konto „Claude“</b><p class="hint">Rolle Mitglied, eigene E-Mail. Sperren unter Einstellungen → Benutzer.</p></div></li>
+          <li><div><b>Konto „Claude“</b><p class="hint">Rolle Mitglied, eigene E-Mail. Sperren unter Einstellungen → Wiki → Mitglieder.</p></div></li>
           <li><div><b>Gemeinsame Sammlung „Von Claude“</b><p class="hint">Dort landet, was in keine andere Sammlung passt. Sammlungen, die Claude selbst anlegt, wären nur für Claude sichtbar.</p></div></li>
           <li><div><b>Anweisung für Claude</b><p class="hint">Auf Deutsch schreiben, erst suchen, dann ergänzen, keine Passwörter, Proxmox und NetBird nur unter „Notizen“.</p></div></li>
         </ol></div>`;
@@ -304,7 +368,7 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
   }
 
   function pBereiche() {
-    return `<div><div class="kicker">Ordnung</div><h1>Bereiche</h1>
+    return `<div class="phead"><div class="kicker">Ordnung</div><h1>Bereiche</h1>
       <p class="lede">Sortiert Domains, VMs und NetBird-Geräte automatisch in Bereiche – zum Beispiel alles unter <code>*.morninghosting.de</code> nach „Minecraft-Server“. Die Regeln sind eine normale Wiki-Seite, die du direkt bearbeitest.</p></div>
       <div class="card"><h2>${S.sync.counts.areas} Bereiche</h2>
         <div class="row">${S.sync.areas.length ? S.sync.areas.map((a) => `<span class="pill ok">${esc(a.replace(/\//g, " › "))}</span>`).join("") : '<span class="hint">Noch keine – sobald Proxmox oder NetBird verbunden ist, legt Brainbox die Seite „Zuordnungsregeln“ an.</span>'}</div>
@@ -331,14 +395,14 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
   function pAnmeldung() {
     const L = S.login, url = S.wiki.url;
     const f = (name, label, type = "text", ph = "") => `<label>${esc(label)} <input type="${type}" name="${name}" placeholder="${esc(ph)}" autocomplete="off"></label>`;
-    return `<div><div class="kicker">Zugang</div><h1>Anmeldung</h1>
-      <p class="lede">Welche Wege zum Einloggen es gibt. ${S.wiki.inviteRequired ? "Rein kommt nur, wen du unter Einstellungen → Benutzer eingeladen hast – egal über welchen Weg." : "Achtung: Einladungen sind nicht erforderlich – mit Google oder Microsoft könnte sich jedes Konto anmelden."}</p></div>
+    return `<div class="phead"><div class="kicker">Zugang</div><h1>Anmeldung</h1>
+      <p class="lede">Welche Wege zum Einloggen es gibt. ${S.wiki.inviteRequired ? "Rein kommt nur, wen du unter Einstellungen → Wiki → Mitglieder eingeladen hast – egal über welchen Weg." : "Achtung: Einladungen sind nicht erforderlich – mit Google oder Microsoft könnte sich jedes Konto anmelden."}</p></div>
       <div class="card">
         ${provRow("link", "Login-Link", true, "Immer da. Neuen Link unter Übersicht erstellen.")}
         ${provRow("email", "E-Mail", !!L.email, L.email ? `Login-Links per Mail über ${esc(L.email)}` : "Braucht ein Postfach zum Versenden, z. B. Gmail mit App-Passwort.",
           `<label>Postfach <select name="SMTP_PRESET"><option value="smtp.gmail.com:465">Gmail</option><option value="mail.gmx.net:587">GMX</option><option value="smtp.web.de:587">web.de</option><option value="smtp-mail.outlook.com:587">Outlook / Hotmail</option><option value="smtp.office365.com:587">Microsoft 365</option><option value="smtp.ionos.de:465">IONOS</option><option value="smtp.strato.de:465">Strato</option></select></label>
            ${f("SMTP_USERNAME", "E-Mail-Adresse", "email", "brainbox@gmail.com")}${f("SMTP_PASSWORD", "App-Passwort", "password")}${f("SMTP_FROM_EMAIL", "Absender (leer = gleiche Adresse)", "email")}`)}
-        ${provRow("passkeys", "Passkeys", L.passkeys, L.passkeys ? "An. Jeder legt seinen unter Profil → Einstellungen → Passkeys an." : "Brauchen die HTTPS-Adresse mit Domain.")}
+        ${provRow("passkeys", "Passkeys", L.passkeys, L.passkeys ? "An. Jeder legt seinen unter Einstellungen → Konto → Passkeys an." : "Brauchen die HTTPS-Adresse mit Domain.")}
         ${provRow("google", "Google", L.google, `Redirect-URI: <code>${esc(url)}/auth/google.callback</code> · Schlüssel aus der Google Cloud Console`, f("GOOGLE_CLIENT_ID", "Client-ID") + f("GOOGLE_CLIENT_SECRET", "Clientschlüssel", "password"))}
         ${provRow("microsoft", "Microsoft", L.microsoft, `Firmen- und Schulkonten · Redirect-URI: <code>${esc(url)}/auth/azure.callback</code>`, f("AZURE_CLIENT_ID", "Anwendungs-ID") + f("AZURE_CLIENT_SECRET", "Geheimer Schlüssel", "password") + f("AZURE_TENANT_ID", "Tenant (leer = alle Organisationen)"))}
         ${provRow("discord", "Discord", L.discord, `Redirect-URI: <code>${esc(url)}/auth/discord.callback</code>`, f("DISCORD_CLIENT_ID", "Client ID") + f("DISCORD_CLIENT_SECRET", "Client Secret", "password") + f("DISCORD_SERVER_ID", "Server-ID (optional)"))}
@@ -349,11 +413,11 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
 
   function pUpdate() {
     const u = S.update || {};
-    return `<div><div class="kicker">System</div><h1>Version & Update</h1>
-      <p class="lede">Brainbox hat eigene Versionen. Zu jeder Version gehört ein fest getesteter Outline-Kern.</p></div>
+    return `<div class="phead"><div class="kicker">System</div><h1>Version & Update</h1>
+      <p class="lede">Brainbox hat eigene Versionen. Zu jeder Version gehört ein fest getesteter Wiki-Kern.</p></div>
       ${hasUpdate() ? updateBanner(true) : ""}
-      <div class="tiles"><div class="tile"><span class="k">Installiert</span><span class="v">v${esc(S.version.brainbox)}</span><span class="s">Kern: Outline ${esc(S.version.core)}</span></div>
-        <div class="tile"><span class="k"><span class="dot ${hasUpdate() ? "warn" : u.latest ? "ok" : ""}"></span>Neueste Version</span><span class="v">${u.latest ? `v${esc(u.latest)}` : "–"}</span><span class="s">${u.checkedAt ? `geprüft ${esc(ago(u.checkedAt))}` : "noch nicht geprüft"}${u.error ? ` · ${esc(u.error)}` : ""}</span></div>
+      <div class="tiles"><div class="tile"><span class="k">Installiert</span><span class="v">v${esc(S.version.brainbox)}</span><span class="s">Kern ${esc(S.version.core.replace(/^v/, ""))}</span></div>
+        <div class="tile"><span class="k"><span class="dot ${hasUpdate() ? "warn" : u.latest ? "ok" : ""}"></span>Neueste Version</span><span class="v">${u.latest ? `v${esc(hasUpdate() ? u.latest : S.version.brainbox)}` : "–"}</span><span class="s">${u.checkedAt ? `geprüft ${esc(ago(u.checkedAt))}` : "noch nicht geprüft"}${u.error ? ` · ${esc(u.error)}` : ""}</span></div>
         <div class="tile"><span class="k">Automatisch</span><span class="v">alle 6 Std.</span><span class="s">sieht Brainbox selbst nach neuen Versionen</span></div></div>
       <div class="card"><h2>Aktualisieren</h2><p class="hint">Vor dem Update sichert Brainbox Datenbank und Einstellungen. Geht beim Bauen etwas schief, läuft automatisch wieder die alte Version. Das Wiki ist währenddessen 10 bis 20 Minuten nicht erreichbar.</p>
         <div class="row"><button type="button" class="btn" data-act="update/check">Nach Updates suchen</button><button type="button" class="btn primary" data-act="update/start">Update starten</button><button type="button" class="btn" data-act="update/log">Protokoll anzeigen</button></div>
@@ -367,21 +431,342 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
   }
   function updateBanner(onUpdatePage) {
     const u = S.update;
-    return `<div class="card banner"><div class="row"><span class="ico">${ICON_UPDATE}</span><div class="grow"><b>Update verfügbar: Brainbox ${esc(u.latest)}</b><div class="hint">Installiert ist ${esc(u.current)}${u.latestCore && u.latestCore !== u.currentCore ? ` · neuer Kern: Outline ${esc(u.latestCore)}` : ""}. Vorher wird alles gesichert.</div></div>
+    return `<div class="card banner"><div class="row"><span class="ico">${ICON_UPDATE}</span><div class="grow"><b>Update verfügbar: Brainbox ${esc(u.latest)}</b><div class="hint">Installiert ist ${esc(u.current)}${u.latestCore && u.latestCore !== u.currentCore ? ` · neuer Kern ${esc(u.latestCore.replace(/^v/, ""))}` : ""}. Vorher wird alles gesichert.</div></div>
       ${onUpdatePage ? `<button type="button" class="btn primary" data-act="update/start">Jetzt aktualisieren</button>` : `<button type="button" class="btn primary" data-go="update">Zum Update</button>`}</div></div>`;
   }
 
-  const PAGES = { uebersicht: pUebersicht, proxmox: pProxmox, netbird: pNetbird, claude: pClaude, bereiche: pBereiche, anmeldung: pAnmeldung, update: pUpdate };
-  function render() { if (!PAGES[view]) view = "uebersicht"; shell(PAGES[view]()); }
+  // =====================================================================================================
+  // Wiki- und Konto-Einstellungen im Stil der Zentrale (Allgemein, Mitglieder, Sicherheit, Vorlagen,
+  // Export, Profil, Darstellung, Benachrichtigungen). Sie sprechen mit der Sitzung des Nutzers direkt
+  // mit der Wiki-API (/api/…). Eingefügt in zentrale/app.html.
+  // =====================================================================================================
+  let ME = null; // auth.info: { user, team }
+  const W = {}; // nachgeladene Listen: users, templates, exports, collections
+  function csrf() { const m = document.cookie.match(/(?:^|;\s*)(?:__Host-)?csrfToken=([^;]+)/); return m ? decodeURIComponent(m[1]) : ""; }
+  async function wiki(ep, body = {}) {
+    if (window.BRAINBOX_MOCK) return window.BRAINBOX_MOCK(`wiki:${ep}`, body);
+    const r = await fetch(`/api/${ep}`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", Accept: "application/json", "x-csrf-token": csrf() }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 401) throw Object.assign(new Error("login"), { gate: "login" });
+    if (!r.ok) throw new Error(j.message || `Das hat nicht geklappt (Fehler ${r.status}).`);
+    return j;
+  }
+  const isAdmin = () => ME?.user?.role === "admin";
+  const tp = (k, d) => (ME?.team?.preferences && k in ME.team.preferences ? ME.team.preferences[k] : d);
+  const up = (k, d) => (ME?.user?.preferences && k in ME.user.preferences ? ME.user.preferences[k] : d);
+  const toggle = (attr, key, on, disabled) => `<button type="button" class="switch" role="switch" ${attr}="${esc(key)}" aria-checked="${on ? "true" : "false"}" aria-label="${esc(key)}"${disabled ? " disabled" : ""}></button>`;
+  const setrow = (title, desc, control) => `<div class="setrow"><div class="grow"><b>${esc(title)}</b>${desc ? `<small>${desc}</small>` : ""}</div><div class="ctl">${control}</div></div>`;
+  const choice = (attr, key, value, options) => `<select ${attr}="${esc(key)}" aria-label="${esc(key)}">${options.map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(value) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
+  const head = (kicker, title, lede) => `<div class="phead"><div class="kicker">${esc(kicker)}</div><h1>${esc(title)}</h1><p class="lede">${lede}</p></div>`;
+  const loading = '<div class="empty">Lädt …</div>';
+  const initial = (name) => esc((name || "?").trim()[0] || "?").toUpperCase();
+  const avatarBox = (url, name, color, cls = "") => url ? `<img class="ava ${cls}" src="${esc(url)}" alt="">` : `<span class="ava ${cls}" style="background:${esc(color || "#2F7A5B")}">${initial(name)}</span>`;
+  const dateDe = (iso) => (iso ? new Date(iso).toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short" }) : "–");
+  const BRAINBOX_ACCOUNTS = /^(automatik|claude)@/;
+  // Daten einer Seite einmal nachladen, dann neu zeichnen
+  async function need(key, loader) {
+    if (W[key] !== undefined) return W[key];
+    W[key] = null;
+    try { W[key] = await loader(); } catch (e) { W[key] = { error: e.message }; }
+    render();
+    return W[key];
+  }
+
+  async function saveTeam(patch, msg = "Gespeichert") {
+    const r = await wiki("team.update", patch);
+    ME.team = { ...ME.team, ...(r.data || {}), preferences: { ...(ME.team.preferences || {}), ...((r.data || {}).preferences || patch.preferences || {}) } };
+    toast(msg); render();
+  }
+  async function saveUser(patch, msg = "Gespeichert") {
+    const r = await wiki("users.update", patch);
+    ME.user = { ...ME.user, ...(r.data || {}), preferences: { ...(ME.user.preferences || {}), ...((r.data || {}).preferences || patch.preferences || {}) } };
+    toast(msg); render();
+  }
+  async function upload(file) {
+    const r = await wiki("attachments.create", { name: file.name, contentType: file.type, size: file.size, preset: "avatar" });
+    const d = r.data;
+    const form = new FormData();
+    for (const k in d.form) form.append(k, d.form[k]);
+    form.append("file", file);
+    const res = await fetch(d.uploadUrl, { method: "POST", body: form, credentials: "same-origin", headers: { "x-csrf-token": csrf() } });
+    if (!res.ok) throw new Error(`Hochladen hat nicht geklappt (Fehler ${res.status}).`);
+    return d.attachment.url;
+  }
+
+  // --- Wiki: Allgemein ---
+  function pAllgemein() {
+    const t = ME.team;
+    need("collections", async () => (await wiki("collections.list", { limit: 100 })).data || []);
+    const cols = Array.isArray(W.collections) ? W.collections : [];
+    return `${head("Wiki", "Allgemein", "Name, Bild und Verhalten deines Wikis. Änderungen gelten sofort für alle.")}
+      <div class="card"><h2>Name und Bild</h2>
+        <form class="grid" data-form="team-name">
+          <label>Name des Wikis <input type="text" name="name" value="${esc(t.name)}" required maxlength="255"></label>
+          <label>Kurze Beschreibung <input type="text" name="description" value="${esc(t.description || "")}" placeholder="z. B. Unser Homelab-Wiki" maxlength="255"></label>
+          <div class="full row"><button class="btn primary" type="submit">Speichern</button></div>
+        </form>
+        <div class="row">${avatarBox(t.avatarUrl, t.name, "#118656", "big")}
+          <div class="grow"><b>Wiki-Bild</b><div class="hint">Steht oben in der Seitenleiste und auf der Anmeldeseite.</div></div>
+          <button type="button" class="btn small" data-team-logo>Brainbox-Logo</button>
+          <label class="btn small filebtn">Eigenes Bild …<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-upload="team" hidden></label></div>
+      </div>
+      <div class="card"><h2>Beim Öffnen</h2>
+        ${setrow("Startansicht", "Wohin Brainbox nach der Anmeldung führt.", choice("data-team-select", "defaultCollectionId", t.defaultCollectionId || "", [["", "Startseite"], ...cols.map((c) => [c.id, `Sammlung „${c.name}“`])]))}
+      </div>
+      <div class="card"><h2>Seiten</h2>
+        ${setrow("Eigener Bearbeiten-Modus", "Aus: Seiten sind sofort bearbeitbar. An: erst auf „Bearbeiten“ klicken – schützt vor versehentlichen Änderungen.", toggle("data-team-pref", "seamlessEdit", !tp("seamlessEdit", true)) )}
+        ${setrow("Inhaltsverzeichnis", "Auf welcher Seite neben dem Text es steht.", choice("data-team-pref-select", "tocPosition", tp("tocPosition", "left"), [["left", "links"], ["right", "rechts"]]))}
+        ${setrow("Wiki-Bild auf geteilten Seiten", "Öffentlich geteilte Seiten zeigen dein Wiki-Bild und den Namen.", toggle("data-team-pref", "publicBranding", tp("publicBranding", false)))}
+      </div>`;
+  }
+
+  // --- Wiki: Mitglieder ---
+  const ROLE = { admin: "Admin", member: "Mitglied", viewer: "Nur lesen", guest: "Gast" };
+  function pMitglieder() {
+    need("users", async () => (await wiki("users.list", { limit: 100, filter: "all", sort: "name", direction: "ASC" })).data || []);
+    const users = Array.isArray(W.users) ? W.users : null;
+    const admin = isAdmin();
+    const row = (u) => {
+      const bot = BRAINBOX_ACCOUNTS.test(u.email || "");
+      const me = u.id === ME.user.id;
+      const status = u.isSuspended ? '<span class="pill">gesperrt</span>' : !u.lastActiveAt ? '<span class="pill warn">eingeladen</span>' : `<span class="hint">aktiv ${esc(ago(u.lastActiveAt))}</span>`;
+      const acts = !admin || me || bot ? (bot ? '<span class="pill ok">Brainbox</span>' : "") :
+        `${choice("data-role", u.id, u.role, Object.entries(ROLE).filter(([k]) => k !== "guest" || u.role === "guest"))}
+         ${!u.lastActiveAt && !u.isSuspended ? `<button type="button" class="btn small" data-user-act="resendInvite" data-id="${esc(u.id)}">Erneut einladen</button>` : ""}
+         <button type="button" class="btn small ${u.isSuspended ? "" : "danger"}" data-user-act="${u.isSuspended ? "activate" : "suspend"}" data-id="${esc(u.id)}">${u.isSuspended ? "Entsperren" : "Sperren"}</button>`;
+      return `<div class="member">${avatarBox(u.avatarUrl, u.name, u.color)}<div class="grow"><b>${esc(u.name)}${me ? " (du)" : ""}</b><div class="meta">${esc(u.email || "")} · ${esc(ROLE[u.role] || u.role)}</div></div><div class="status">${status}</div><div class="acts">${acts}</div></div>`;
+    };
+    return `${head("Wiki", "Mitglieder", `Wer im Wiki ist und was er darf. ${ME.team.inviteRequired ? "Rein kommt nur, wen du hier einlädst – egal ob per E-Mail, Passkey, Google oder Microsoft." : "Achtung: Einladungen sind nicht erforderlich (siehe Sicherheit)."}`)}
+      ${admin || tp("membersCanInvite", false) ? `<div class="card"><h2>Jemanden einladen</h2>
+        <form class="grid" data-form="invite">
+          <label>E-Mail <input type="email" name="email" required placeholder="name@beispiel.de"></label>
+          <label>Name <input type="text" name="name" placeholder="Vorname"></label>
+          <label>Rolle ${choice("name", "role", ME.team.defaultUserRole || "member", [["member", "Mitglied – darf schreiben"], ["viewer", "Nur lesen"], ...(admin ? [["admin", "Admin – darf alles"]] : [])])}</label>
+          <div class="full row"><button class="btn primary" type="submit">Einladen</button><span class="hint">Brainbox schickt eine E-Mail mit Link. Ohne Postfach: danach unter Brainbox → Übersicht einen Login-Link für die Person erstellen.</span></div>
+        </form></div>` : ""}
+      <div class="card"><h2>${users ? `${users.filter((u) => !u.isSuspended).length} Mitglieder` : "Mitglieder"}</h2>
+        ${users ? `<div class="members">${users.map(row).join("")}</div>` : W.users?.error ? `<div class="empty">${esc(W.users.error)}</div>` : loading}
+        <p class="hint">Rollen: <b>Admin</b> darf alles, <b>Mitglied</b> schreibt und legt Sammlungen an, <b>Nur lesen</b> sieht alles und ändert nichts. Gesperrte kommen nicht mehr rein, ihre Seiten bleiben.</p>
+      </div>`;
+  }
+
+  // --- Wiki: Sicherheit ---
+  function pSicherheit() {
+    const t = ME.team;
+    return `${head("Wiki", "Sicherheit", "Wer reinkommt, was geteilt werden darf und wer was sieht.")}
+      <div class="card"><h2>Wer reinkommt</h2>
+        ${setrow("Einladungen erforderlich", "Nur eingeladene Personen kommen rein – auch über Google, Microsoft oder Discord. Bei der Installation eingeschaltet, so lassen.", toggle("data-team-toggle", "inviteRequired", t.inviteRequired))}
+        ${setrow("Rolle für Neue", "Welche Rolle neue Mitglieder bekommen, wenn nichts anderes gewählt ist.", choice("data-team-select", "defaultUserRole", t.defaultUserRole || "member", [["member", "Mitglied"], ["viewer", "Nur lesen"]]))}
+        ${setrow("Mitglieder dürfen einladen", "Sonst können nur Admins neue Leute einladen.", toggle("data-team-pref", "membersCanInvite", tp("membersCanInvite", false)))}
+      </div>
+      <div class="card"><h2>Teilen und Inhalte</h2>
+        ${setrow("Öffentliche Freigaben", "Einzelne Seiten per Link ohne Anmeldung teilen.", toggle("data-team-toggle", "sharing", t.sharing))}
+        ${setrow("Mitglieder legen Sammlungen an", "Sonst nur Admins.", toggle("data-team-toggle", "memberCollectionCreate", t.memberCollectionCreate))}
+        ${setrow("Persönliche Seiten", "Jeder hat einen eigenen Bereich „Persönlich“, den nur er sieht.", toggle("data-team-pref", "personalDocs", tp("personalDocs", true)))}
+        ${setrow("Kommentare", "Wer an Seiten Kommentare schreiben darf.", choice("data-team-pref-select", "commenting", tp("commenting", "everyone"), [["everyone", "alle"], ["members", "nur Mitglieder"], ["none", "niemand"]]))}
+        ${setrow("„Nur lesen“ darf herunterladen", "Personen mit „Nur lesen“ können Seiten als Datei exportieren.", toggle("data-team-pref", "viewersCanExport", tp("viewersCanExport", true)))}
+      </div>
+      <div class="card"><h2>Privatsphäre</h2>
+        ${setrow("E-Mail-Adressen sichtbar für", "Wer die E-Mail-Adressen anderer sieht.", choice("data-team-pref-select", "emailDisplay", tp("emailDisplay", "members"), [["members", "Mitglieder"], ["everyone", "alle"], ["none", "nur Admins"]]))}
+        ${setrow("Mitglieder dürfen ihr Konto löschen", "Sonst geht das nur über einen Admin.", toggle("data-team-pref", "membersCanDeleteAccount", tp("membersCanDeleteAccount", true)))}
+      </div>`;
+  }
+
+  // --- Wiki: Vorlagen ---
+  const SAMPLE_TEMPLATES = [
+    ["Neuer Dienst", ["Wozu", "Adresse und Zugang", "Wo er läuft", "Sicherung", "Besonderheiten"]],
+    ["Störung", ["Was passiert ist", "Ursache", "Lösung", "Damit es nicht wieder passiert"]],
+    ["Anleitung", ["Ziel", "Schritte", "Prüfen, ob es geklappt hat"]],
+  ];
+  const pmDoc = (sections) => ({ type: "doc", content: sections.flatMap((h) => [{ type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: h }] }, { type: "paragraph" }]) });
+  function pVorlagen() {
+    need("templates", async () => (await wiki("templates.list", { limit: 100 })).data || []);
+    const list = Array.isArray(W.templates) ? W.templates : null;
+    return `${head("Wiki", "Vorlagen", "Vorlagen sind Gerüste für Seiten, die du öfter brauchst. Beim Anlegen einer Seite wählst du oben „Vorlage“.")}
+      <div class="card"><div class="row"><h2 class="grow" style="margin:0">${list ? `${list.length} Vorlagen` : "Vorlagen"}</h2><a class="btn primary" href="/settings/templates/new" style="text-decoration:none">Neue Vorlage</a></div>
+        ${list ? (list.length ? `<div class="list">${list.map((x) => `<a class="server tmpl" href="/settings/templates/${esc(x.id)}" style="text-decoration:none;color:inherit"><span class="dot ok"></span><div><b>${esc(x.title || "Ohne Titel")}</b><div class="meta">geändert ${esc(ago(x.updatedAt))}</div></div><span class="pill">Bearbeiten</span></a>`).join("")}</div>` :
+          `<div class="empty">Noch keine Vorlagen. Leg unten drei Beispiele an oder eine eigene.</div>`) : W.templates?.error ? `<div class="empty">${esc(W.templates.error)}</div>` : loading}
+      </div>
+      <div class="card"><h2>Beispiele für dein Homelab</h2>
+        <ol class="steps">${SAMPLE_TEMPLATES.map(([t, s]) => `<li><div><b>${esc(t)}</b><p class="hint">${esc(s.join(" · "))}</p></div></li>`).join("")}</ol>
+        <div class="row"><button type="button" class="btn" data-sample-templates>Diese drei als Vorlagen anlegen</button></div>
+      </div>`;
+  }
+
+  // --- Wiki: Export ---
+  function pExport() {
+    need("exports", async () => (await wiki("fileOperations.list", { type: "export", limit: 25 })).data || []);
+    const list = Array.isArray(W.exports) ? W.exports : null;
+    const state = { complete: "fertig", creating: "läuft", uploading: "läuft", error: "Fehler", expired: "abgelaufen" };
+    return `${head("Wiki", "Export", "Alle Seiten als Datei – zum Mitnehmen oder als zusätzliche Sicherung. Datenbank und Einstellungen sichert Brainbox außerdem vor jedem Update.")}
+      <div class="card"><h2>Alles exportieren</h2>
+        <form class="grid" data-form="export">
+          <label>Format ${choice("name", "format", "outline-markdown", [["outline-markdown", "Markdown (zum Weiterverwenden)"], ["html", "HTML (zum Ansehen im Browser)"], ["json", "JSON (zum Wiederherstellen)"]])}</label>
+          <label class="check" style="align-self:end"><input type="checkbox" name="attachments" checked> Bilder und Dateien mitnehmen</label>
+          <div class="full row"><button class="btn primary" type="submit">Export starten</button><span class="hint">Dauert je nach Größe ein paar Minuten. Er erscheint dann unten zum Herunterladen.</span></div>
+        </form></div>
+      <div class="card"><div class="row"><h2 class="grow" style="margin:0">Letzte Exporte</h2><button type="button" class="btn small" data-reload="exports">Aktualisieren</button></div>
+        ${list ? (list.length ? `<div class="list">${list.map((x) => `<div class="server"><span class="dot ${x.state === "complete" ? "ok" : x.state === "error" ? "bad" : "warn"}"></span><div><b>${esc(x.name || "Export")}</b><div class="meta">${esc(dateDe(x.createdAt))} · ${esc(String(x.format || "").replace("outline-markdown", "Markdown").toUpperCase())}${x.size ? ` · ${Math.max(1, Math.round(x.size / 1024))} KB` : ""} · ${esc(state[x.state] || x.state)}</div></div>
+          <div class="acts">${x.state === "complete" ? `<a class="btn small" href="/api/fileOperations.redirect?id=${esc(x.id)}" target="_blank" rel="noopener" style="text-decoration:none">Herunterladen</a>` : ""}</div></div>`).join("")}</div>` :
+          '<div class="empty">Noch kein Export.</div>') : W.exports?.error ? `<div class="empty">${esc(W.exports.error)}</div>` : loading}
+      </div>`;
+  }
+
+  // --- Konto: Profil ---
+  function pProfil() {
+    const u = ME.user;
+    return `${head("Konto", "Profil", "So sehen dich die anderen im Wiki.")}
+      <div class="card"><div class="row">${avatarBox(u.avatarUrl, u.name, u.color, "big")}
+          <div class="grow"><b>${esc(u.name)}</b><div class="hint">${esc(u.email || "")} · ${esc(ROLE[u.role] || u.role)}</div></div>
+          <label class="btn small filebtn">Bild ändern …<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-upload="user" hidden></label>
+          ${u.avatarUrl ? '<button type="button" class="btn small" data-user-avatar-clear>Bild entfernen</button>' : ""}</div>
+        <form class="grid" data-form="profile">
+          <label>Name <input type="text" name="name" value="${esc(u.name)}" required maxlength="255"></label>
+          <label>E-Mail <input type="email" value="${esc(u.email || "")}" disabled></label>
+          <div class="full row"><button class="btn primary" type="submit">Speichern</button><span class="hint">Die E-Mail-Adresse ändert ein Admin unter Wiki → Mitglieder.</span></div>
+        </form></div>`;
+  }
+
+  // --- Konto: Darstellung ---
+  function currentTheme() { try { return JSON.parse(localStorage.getItem("theme") || '"dark"'); } catch (e) { return "dark"; } }
+  function pDarstellung() {
+    return `${head("Konto", "Darstellung", "Wie Brainbox für dich aussieht und sich verhält. Gilt nur für dich.")}
+      <div class="card"><h2>Aussehen</h2>
+        ${setrow("Farbschema", "Dunkel ist der Brainbox-Standard. „System“ folgt deinem Gerät.", choice("data-theme-select", "theme", currentTheme(), [["dark", "Dunkel"], ["light", "Hell"], ["system", "wie das Gerät"]]))}
+        ${setrow("Sprache", "Sprache der Oberfläche. Brainbox lädt danach neu.", choice("data-user-select", "language", ME.user.language || "de_DE", [["de_DE", "Deutsch"], ["en_US", "English"]]))}
+      </div>
+      <div class="card"><h2>Beim Arbeiten</h2>
+        ${setrow("Dort weitermachen, wo du warst", "Brainbox öffnet beim Start die zuletzt besuchte Seite statt der Startseite.", toggle("data-user-pref", "rememberLastPath", up("rememberLastPath", false)))}
+        ${setrow("Eigener Bearbeiten-Modus", "Erst auf „Bearbeiten“ klicken, bevor sich eine Seite ändern lässt.", toggle("data-user-pref-inv", "seamlessEdit", !up("seamlessEdit", true)))}
+        ${setrow("Zeilennummern in Code", "Code-Blöcke zeigen Zeilennummern.", toggle("data-user-pref", "codeBlockLineNumbers", up("codeBlockLineNumbers", true)))}
+        ${setrow("Schlaue Ersetzungen", "Aus -> wird →, aus \"…\" werden „…“ und so weiter.", toggle("data-user-pref", "enableSmartText", up("enableSmartText", true)))}
+        ${setrow("Wörter und Lesezeit", "Unter dem Titel stehen Anzahl der Wörter und Lesezeit.", toggle("data-user-pref", "showDocumentStats", up("showDocumentStats", false)))}
+      </div>`;
+  }
+
+  // --- Konto: Benachrichtigungen ---
+  const NOTIFS = [
+    ["Erwähnungen", "Jemand erwähnt dich mit @ auf einer Seite oder in einem Kommentar.", ["documents.mentioned", "comments.mentioned"]],
+    ["Kommentare", "Neue Kommentare an Seiten, an denen du mitschreibst, und Antworten an dich.", ["comments.create", "comments.resolve"]],
+    ["Änderungen", "Seiten, denen du folgst, wurden geändert.", ["documents.update"]],
+    ["Neue Seiten", "In Sammlungen, denen du folgst, erscheint eine neue Seite.", ["documents.publish"]],
+    ["Neue Sammlungen", "Jemand legt eine neue Sammlung an.", ["collections.create"]],
+    ["Freigaben für dich", "Du bekommst Zugriff auf eine Seite oder Sammlung.", ["documents.add_user", "collections.add_user"]],
+    ["Zugriffsanfragen", "Jemand möchte eine deiner Seiten sehen.", ["access_requests.create"]],
+    ["Einladung angenommen", "Jemand, den du eingeladen hast, ist jetzt im Wiki.", ["emails.invite_accepted"]],
+    ["Export fertig", "Dein Export liegt zum Herunterladen bereit.", ["emails.export_completed"]],
+  ];
+  const NOTIF_DEFAULT = { "documents.publish": false, "collections.create": false };
+  function notifOn(ev) {
+    const v = ME.user.notificationSettings?.[ev];
+    if (v === undefined) return NOTIF_DEFAULT[ev] ?? true;
+    return typeof v === "object" ? v.email !== false : !!v;
+  }
+  function pBenachrichtigungen() {
+    return `${head("Konto", "Benachrichtigungen", `Worüber Brainbox dir eine E-Mail schickt${ME.user.email ? ` (an ${esc(ME.user.email)})` : ""}. Im Wiki selbst siehst du alles zusätzlich unter der Glocke unten links.`)}
+      ${S && !S.login.email ? '<div class="card soft"><b>Noch kein Postfach eingerichtet.</b><p class="hint">Ohne Postfach verschickt Brainbox keine E-Mails. Einrichten unter Brainbox → Anmeldung → E-Mail.</p></div>' : ""}
+      <div class="card"><h2>E-Mails</h2>
+        ${NOTIFS.map(([t, d, evs]) => setrow(t, esc(d), toggle("data-notif", evs.join(","), evs.some(notifOn)))).join("")}
+      </div>`;
+  }
+
+  // --- Bedienung der neuen Seiten ---
+  async function guard(fn, el) {
+    if (el) el.disabled = true;
+    try { await fn(); } catch (e) { if (e.gate) gate(e.gate); else toast(e.message || "Das hat nicht geklappt."); render(); }
+    finally { if (el && el.isConnected) el.disabled = false; }
+  }
+  ROOT.addEventListener("click", (e) => {
+    const sw = e.target.closest("button.switch");
+    if (sw && !sw.disabled) {
+      const on = sw.getAttribute("aria-checked") !== "true";
+      sw.setAttribute("aria-checked", String(on));
+      if (sw.dataset.teamToggle) guard(() => saveTeam({ [sw.dataset.teamToggle]: on }), sw);
+      else if (sw.dataset.teamPref) guard(() => saveTeam({ preferences: { [sw.dataset.teamPref]: sw.dataset.teamPref === "seamlessEdit" ? !on : on } }), sw);
+      else if (sw.dataset.userPref) guard(() => saveUser({ preferences: { [sw.dataset.userPref]: on } }), sw);
+      else if (sw.dataset.userPrefInv) guard(() => saveUser({ preferences: { [sw.dataset.userPrefInv]: !on } }), sw);
+      else if (sw.dataset.notif) guard(async () => {
+        for (const ev of sw.dataset.notif.split(",")) await wiki(on ? "users.notificationsSubscribe" : "users.notificationsUnsubscribe", { eventType: ev });
+        ME.user.notificationSettings = { ...(ME.user.notificationSettings || {}) };
+        for (const ev of sw.dataset.notif.split(",")) ME.user.notificationSettings[ev] = on;
+        toast(on ? "Eingeschaltet" : "Ausgeschaltet");
+      }, sw);
+      return;
+    }
+    const logo = e.target.closest("[data-team-logo]");
+    if (logo) { guard(() => saveTeam({ avatarUrl: "/images/icon-192.png" }, "Brainbox-Logo gesetzt"), logo); return; }
+    const clr = e.target.closest("[data-user-avatar-clear]");
+    if (clr) { guard(() => saveUser({ avatarUrl: null }, "Bild entfernt"), clr); return; }
+    const ua = e.target.closest("[data-user-act]");
+    if (ua) {
+      const act = ua.dataset.userAct;
+      if (act === "suspend" && !ua.dataset.sure) { ua.dataset.sure = "1"; ua.textContent = "Wirklich sperren?"; return; }
+      guard(async () => { await wiki(`users.${act}`, { id: ua.dataset.id }); toast({ suspend: "Gesperrt", activate: "Entsperrt", resendInvite: "Einladung erneut geschickt" }[act]); delete W.users; render(); }, ua);
+      return;
+    }
+    const smp = e.target.closest("[data-sample-templates]");
+    if (smp) {
+      guard(async () => { for (const [t, s] of SAMPLE_TEMPLATES) await wiki("templates.create", { title: t, data: pmDoc(s), publish: true }); toast("Drei Vorlagen angelegt"); delete W.templates; render(); }, smp);
+      return;
+    }
+    const rl = e.target.closest("[data-reload]");
+    if (rl) { delete W[rl.dataset.reload]; render(); }
+  });
+  ROOT.addEventListener("change", (e) => {
+    const el = e.target;
+    if (el.matches("[data-team-select]")) guard(() => saveTeam({ [el.dataset.teamSelect]: el.value || null }), el);
+    else if (el.matches("[data-team-pref-select]")) guard(() => saveTeam({ preferences: { [el.dataset.teamPrefSelect]: el.value } }), el);
+    else if (el.matches("[data-role]")) guard(async () => { await wiki("users.update_role", { id: el.dataset.role, role: el.value }); toast("Rolle geändert"); delete W.users; render(); }, el);
+    else if (el.matches("[data-user-select]")) guard(async () => { await saveUser({ [el.dataset.userSelect]: el.value }); if (NAV_OUT) NAV_OUT({ type: "brainbox:reload" }); }, el);
+    else if (el.matches("[data-theme-select]")) { try { localStorage.setItem("theme", JSON.stringify(el.value)); } catch (err) { /* egal */ } if (NAV_OUT) NAV_OUT({ type: "brainbox:theme", theme: el.value }); toast("Farbschema geändert"); }
+    else if (el.matches("[data-upload]") && el.files && el.files[0]) {
+      const who = el.dataset.upload, file = el.files[0];
+      guard(async () => { const url = await upload(file); if (who === "team") await saveTeam({ avatarUrl: url }, "Wiki-Bild geändert"); else await saveUser({ avatarUrl: url }, "Bild geändert"); }, el);
+    }
+  });
+  ROOT.addEventListener("submit", (e) => {
+    const f = e.target.closest("form[data-form]");
+    if (!f || !["team-name", "invite", "profile", "export"].includes(f.dataset.form)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const d = Object.fromEntries(new FormData(f).entries());
+    const btn = f.querySelector('button[type="submit"]');
+    if (f.dataset.form === "team-name") guard(() => saveTeam({ name: d.name.trim(), description: (d.description || "").trim() }), btn);
+    if (f.dataset.form === "profile") guard(() => saveUser({ name: d.name.trim() }), btn);
+    if (f.dataset.form === "invite") guard(async () => {
+      const email = d.email.trim();
+      await wiki("users.invite", { invites: [{ email, name: (d.name || "").trim() || email.split("@")[0], role: d.role || "member" }] });
+      toast(`Einladung an ${email} verschickt`); delete W.users; render();
+    }, btn);
+    if (f.dataset.form === "export") guard(async () => {
+      await wiki("collections.export_all", { format: d.format, includeAttachments: !!d.attachments });
+      toast("Export läuft – er erscheint gleich unten"); delete W.exports; render();
+      setTimeout(() => { if (view === "export") { delete W.exports; render(); } }, 8000);
+    }, btn);
+  }, true);
+
+  const BRAINBOX_PAGES = ["uebersicht", "proxmox", "netbird", "claude", "bereiche", "anmeldung", "update"];
+  const PAGES = { uebersicht: pUebersicht, proxmox: pProxmox, netbird: pNetbird, claude: pClaude, bereiche: pBereiche, anmeldung: pAnmeldung, update: pUpdate,
+    allgemein: pAllgemein, mitglieder: pMitglieder, sicherheit: pSicherheit, vorlagen: pVorlagen, export: pExport, profil: pProfil, darstellung: pDarstellung, benachrichtigungen: pBenachrichtigungen };
+  function render() {
+    if (!ME) return; // erst zeichnen, wenn die Anmeldung geladen ist (load ruft render danach auf)
+    if (!PAGES[view]) view = "uebersicht";
+    if (!S && BRAINBOX_PAGES.includes(view)) { gate("admin"); return; }
+    shell(PAGES[view]());
+  }
 
   function gate(kind) {
     $("#app").innerHTML = `<div class="gate"><div class="box"><img src="${LOGO}" width="56" height="56" alt="">
-      <h1>${kind === "admin" ? "Nur für Admins" : "Bitte anmelden"}</h1><p class="lede">${kind === "admin" ? "Die Brainbox-Zentrale ist nur für Admins des Wikis." : "Melde dich zuerst im Wiki an, dann geht es hier weiter."}</p>
+      <h1>${kind === "admin" ? "Nur für Admins" : "Bitte anmelden"}</h1><p class="lede">${kind === "admin" ? "Diese Einstellungen sind nur für Admins des Wikis." : "Melde dich zuerst im Wiki an, dann geht es hier weiter."}</p>
       <a class="btn primary" href="/" style="text-decoration:none">${kind === "admin" ? "Zurück zum Wiki" : "Zum Wiki"}</a></div></div>`;
   }
 
   async function load() {
-    try { S = await api("status"); render(); }
+    try {
+      try { S = await api("status"); } catch (e) { if (e.gate !== "admin") throw e; S = null; }
+      ME = (await wiki("auth.info")).data;
+      render();
+    }
     catch (e) { if (e.gate) gate(e.gate); else $("#app").innerHTML = `<div class="gate"><div class="box"><h1>Keine Verbindung</h1><p class="lede">Der Brainbox-Dienst antwortet nicht. In ein paar Sekunden neu laden.</p></div></div>`; }
   }
 
@@ -406,6 +791,12 @@ try { var t = JSON.parse(localStorage.getItem("theme") || '"dark"'); if (t === "
   function pollUpdate() { let n = 0; const t = setInterval(async () => { n++; try { const r = await api("update/log", {}); show("update", r); } catch (e) { /* während des Neustarts */ } if (n > 240) clearInterval(t); }, 5000); }
 
   ROOT.addEventListener("click", (e) => {
+    const link = e.target.closest("a[href]");
+    if (link && NAV_OUT && !link.target) {
+      const href = link.getAttribute("href");
+      if (href.startsWith("/")) { e.preventDefault(); NAV_OUT({ type: "brainbox:open", href }); return; }
+      link.target = "_blank"; link.rel = "noopener";
+    }
     const g = e.target.closest("[data-go]");
     if (g) { e.preventDefault(); go(g.dataset.go); return; }
     const c = e.target.closest("[data-copy]");

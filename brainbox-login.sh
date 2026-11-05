@@ -330,7 +330,7 @@ menu_microsoft() {
   local id sec tenant url
   url="$(current_url)"
   confirm_provider "Microsoft" || return 0
-  wt --title "MICROSOFT" --msgbox "So bekommst du die Schlüssel:\n\n1. entra.microsoft.com → App-Registrierungen → Neue Registrierung\n2. Umleitungs-URI (Web):\n   ${url}/auth/azure.callback\n3. Zertifikate & Geheimnisse → Neuer geheimer Clientschlüssel\n4. Anwendungs-ID (Client-ID) und Geheimnis hier eintragen\n\nWichtig: Outline braucht ein Firmen- oder Schulkonto (Microsoft 365 / Entra ID). Private @outlook.com/@hotmail.com-Konten melden sich besser per E-Mail-Link oder Passkey an." 19 76 || true
+  wt --title "MICROSOFT" --msgbox "So bekommst du die Schlüssel:\n\n1. entra.microsoft.com → App-Registrierungen → Neue Registrierung\n2. Umleitungs-URI (Web):\n   ${url}/auth/azure.callback\n3. Zertifikate & Geheimnisse → Neuer geheimer Clientschlüssel\n4. Anwendungs-ID (Client-ID) und Geheimnis hier eintragen\n\nWichtig: Die Anmeldung mit Microsoft braucht ein Firmen- oder Schulkonto (Microsoft 365 / Entra ID). Private @outlook.com/@hotmail.com-Konten melden sich besser per E-Mail-Link oder Passkey an." 19 76 || true
   id="$(input "MICROSOFT" "Anwendungs-ID / Client-ID (leer = Microsoft ausschalten)" "$(env_get AZURE_CLIENT_ID)")" || return 0
   if [[ -z "$id" ]]; then env_set AZURE_CLIENT_ID ""; env_set AZURE_CLIENT_SECRET ""; env_set AZURE_TENANT_ID ""; return 0; fi
   sec="$(secret "MICROSOFT" "Geheimer Clientschlüssel (leer = alten behalten)")" || return 0

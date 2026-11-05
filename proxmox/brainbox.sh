@@ -75,7 +75,7 @@ header_info() {
 /_____/_/   \__,_/_/_/ /_/_.___/\____/_/|_|
 
 EOF
-  echo -e "  ${BOLD}Outline-Wissensdatenbank für Proxmox VE${CL}\n"
+  echo -e "  ${BOLD}Brainbox – Wiki fürs Homelab auf Proxmox VE${CL}\n"
 }
 
 msg_info() { CURRENT_MSG="$1"; printf '%s%s%s...%s' "$HOLD" "$YW" "$1" "$CL"; }
@@ -231,7 +231,7 @@ fi
 [[ "$var_mode" == "advanced" ]] && advanced_settings
 is_number "$CTID" && ctid_free "$CTID" || die "Container-ID ${CTID} ist ungültig oder schon vergeben."
 is_number "$DISK" && is_number "$CPU" && is_number "$RAM" || die "Disk, CPU und RAM müssen Zahlen sein."
-((RAM >= 4096)) || msg_warn "Weniger als 4096 MB RAM – der Outline-Build kann abbrechen."
+((RAM >= 4096)) || msg_warn "Weniger als 4096 MB RAM – der Build kann abbrechen."
 summary
 
 # --- Speicher wählen ------------------------------------------------------------
@@ -370,7 +370,7 @@ if [[ -n "$DOMAIN" ]]; then WIKI_URL="https://${DOMAIN}"; else WIKI_URL="http://
 pct set "$CTID" --description "<div align='center'>
 <h2>🧠 ${WIKI_NAME}</h2>
 <p>Brainbox · Wiki fürs Homelab</p>
-<p><a href='${WIKI_URL}' target='_blank'>${WIKI_URL}</a> · <a href='http://${IP}:${PORT}' target='_blank'>Heimnetz</a> · <a href='https://github.com/${REPO}' target='_blank'>GitHub</a> · <a href='${WIKI_URL}/zentrale' target='_blank'>Zentrale</a></p>
+<p><a href='${WIKI_URL}' target='_blank'>${WIKI_URL}</a> · <a href='http://${IP}:${PORT}' target='_blank'>Heimnetz</a> · <a href='https://github.com/${REPO}' target='_blank'>GitHub</a> · <a href='${WIKI_URL}/settings/brainbox' target='_blank'>Einstellungen</a></p>
 <p>Update: <code>pct exec ${CTID} -- update</code> · im Container: <code>update</code> · <code>brainbox-connect</code> · <code>brainbox-login</code></p>
 </div>" >/dev/null
 
@@ -378,7 +378,8 @@ echo
 msg_ok "Fertig!"
 echo -e "${INFO}${GN}Wiki '${WIKI_NAME}' wurde eingerichtet.${CL}"
 echo -e "${INFO}${YW}Adresse:${CL} ${BGN}${WIKI_URL}${CL}${DOMAIN:+   (im Heimnetz: http://${IP}:${PORT})}"
-echo -e "${INFO}${YW}Brainbox-Zentrale:${CL} ${WIKI_URL}/zentrale  – weitere Proxmox-Server, NetBird, Claude, Anmeldung, Update"
+echo -e "${INFO}${YW}Einstellungen:${CL} ${WIKI_URL}/settings/brainbox  – weitere Proxmox-Server, NetBird, Claude, Anmeldung, Update"
+echo -e "${INFO}${YW}Anleitung:${CL} im Wiki in der Sammlung 'Start'"
 if [[ -n "$DOMAIN" ]]; then
   echo -e "${INFO}${YW}Reverse-Proxy einrichten:${CL} ${DOMAIN} → http://${IP}:${PORT}  (Websockets an, SSL-Zertifikat)"
 fi

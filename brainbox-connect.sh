@@ -12,6 +12,8 @@
 #                                     NetBird verbinden: Geräte, Netzwerke und Domains ins Wiki
 #   brainbox-connect sync             jetzt abgleichen (läuft sonst alle 5 Minuten)
 #   brainbox-connect status           zeigt, was verbunden ist
+#   brainbox-connect start            Anleitung im Wiki und Abgleich einrichten
+#                                     (ruft die Installation und update auf)
 #
 # Lizenz: MIT, siehe LICENSE.
 # ------------------------------------------------------------------------------
@@ -181,6 +183,41 @@ UNIT
   systemctl enable --now brainbox-sync.timer >/dev/null 2>&1 || warn "Zeitplan konnte nicht gestartet werden (systemctl status brainbox-sync.timer)."
 }
 
+# --- Start: Anleitung, Abgleich, Reihenfolge der Sammlungen ------------------------------
+wait_core() { # wait_core – wartet bis zu 3 Minuten, bis das Wiki antwortet
+  for _ in $(seq 1 90); do
+    [[ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/_health" || true)" == "200" ]] && return 0
+    sleep 2
+  done
+  return 1
+}
+
+order_collections() { # einmalig: Start, Bereiche, Proxmox, NetBird, Von Claude oben in dieser Reihenfolge
+  local flag=/var/lib/brainbox/sammlungen-sortiert list name id idx=0
+  [[ -f "$flag" ]] && return 0
+  session "$(first_admin)"
+  list="$(api collections.list '{"limit":100}')" || return 0
+  for name in "Start" "Bereiche" "Proxmox" "NetBird" "$CLAUDE_COLLECTION"; do
+    id="$(jq -r --arg n "$name" '.data[] | select(.name == $n) | .id' <<<"$list" | head -n1)"
+    if [[ -n "$id" ]]; then api collections.move "$(jq -n --arg id "$id" --arg i "a${idx}" '{id: $id, index: $i}')" >/dev/null || true; fi
+    idx=$((idx + 1))
+  done
+  mkdir -p "$(dirname "$flag")"
+  : >"$flag"
+}
+
+cmd_start() {
+  if ! wait_core; then
+    warn "Das Wiki antwortet noch nicht – die Anleitung kommt beim nächsten Abgleich."
+    return 0
+  fi
+  ensure_bot
+  enable_timer
+  run_sync "$@" || warn "Abgleich hat nicht geklappt – später: brainbox-connect sync"
+  order_collections
+  ok "Anleitung im Wiki (Sammlung 'Start') und Abgleich alle 5 Minuten eingerichtet"
+}
+
 # --- Claude ------------------------------------------------------------------------
 CLAUDE_COLLECTION="Von Claude"
 
@@ -200,7 +237,7 @@ claude_workspace_setup() { # gemeinsame Sammlung "Von Claude" und Anweisung für
   session "$(first_admin)"
   found="$(api collections.list '{"limit":100}' | jq -r --arg n "$CLAUDE_COLLECTION" '.data[] | select(.name == $n) | .id' | head -n1)"
   if [[ -z "$found" ]]; then
-    api collections.create "$(jq -n --arg n "$CLAUDE_COLLECTION" '{name: $n, description: "Was Claude ins Wiki schreibt, wenn keine andere Sammlung passt.", icon: "lightbulb", color: "#8B5CF6", permission: "read_write"}')" >/dev/null &&
+    api collections.create "$(jq -n --arg n "$CLAUDE_COLLECTION" '{name: $n, description: "Was Claude ins Wiki schreibt, wenn keine andere Sammlung passt.", icon: "lightbulb", color: "#8B5CF6", permission: "read_write", index: "a4"}')" >/dev/null &&
       ok "Gemeinsame Sammlung '${CLAUDE_COLLECTION}' angelegt"
   fi
   current="$(api auth.info '{}' | jq -r '.data.team.guidanceMCP // empty')"
@@ -442,6 +479,7 @@ claude) shift; cmd_claude "$@" ;;
 proxmox) shift; cmd_proxmox "$@" ;;
 netbird) shift; cmd_netbird "$@" ;;
 sync) shift; run_sync "$@" ;;
+start) shift; cmd_start "$@" ;;
 status) status ;;
 -h | --help | help) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//' ;;
 *) fail "Unbekannter Befehl: $1 (siehe brainbox-connect --help)" ;;
