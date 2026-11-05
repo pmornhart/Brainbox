@@ -321,7 +321,7 @@ html.embed, html.embed body { height: auto; background: transparent; }
         <div><b>${esc(x.name)}</b>${agent ? ' <span class="tag">anderer Standort</span>' : ""}<div class="meta">${meta}${x.guests != null ? ` · ${x.guests} VMs/Container` : ""}</div></div>
         <div class="acts">${x.wikiUrl ? `<a class="btn small" href="${esc(x.wikiUrl)}" style="text-decoration:none">Im Wiki</a>` : ""}<button type="button" class="btn small" data-act="proxmox/test" data-name="${esc(x.name)}">Prüfen</button><button type="button" class="btn small" data-rename="${esc(x.name)}">Umbenennen</button>${agent ? `<button type="button" class="btn small" data-act="proxmox/agent" data-name="${esc(x.name)}">Neuer Befehl</button>` : ""}<button type="button" class="btn small danger" data-act="proxmox/remove" data-name="${esc(x.name)}">Entfernen</button></div>
         <form class="row rename" data-form="proxmox-rename" data-name="${esc(x.name)}" hidden>
-          <input class="grow" type="text" name="newName" value="${esc(x.name)}" required pattern="[a-z0-9][a-z0-9.\\-]{0,62}" title="Kleinbuchstaben, Ziffern, Punkt und Bindestrich, z. B. zuhause oder ph.morn.lan" aria-label="Neuer Name für ${esc(x.name)}" autocomplete="off">
+          <input class="grow" type="text" name="newName" value="${esc(x.name)}" required maxlength="100" aria-label="Neuer Name für ${esc(x.name)}" autocomplete="off">
           <button class="btn small primary" type="submit">Speichern</button><button class="btn small" type="button" data-rename-cancel>Abbrechen</button>
           <span class="hint">Die Wiki-Seiten bekommen den neuen Namen, Notizen bleiben.</span>
         </form>
@@ -338,7 +338,7 @@ html.embed, html.embed body { height: auto; background: transparent; }
             <p class="hint">Die letzte Zeile zeigt <code>full-tokenid</code> und <code>value</code>. Beides brauchst du gleich, <code>value</code> wird nur dieses eine Mal angezeigt.</p></div></li>
           <li><div><b>Daten eintragen</b>
             <form class="grid" data-form="proxmox">
-              <label>Name <input type="text" name="name" required placeholder="zuhause" pattern="[a-z0-9][a-z0-9.\\-]{0,62}" title="Kleinbuchstaben, Ziffern, Punkt und Bindestrich, z. B. zuhause oder ph.morn.lan" autocomplete="off"></label>
+              <label>Name <input type="text" name="name" required placeholder="zuhause" maxlength="100" autocomplete="off"></label>
               <label>Adresse <input type="text" name="url" required placeholder="https://192.168.1.2:8006" autocomplete="off"></label>
               <label>Token-ID (full-tokenid) <input type="text" name="tokenId" required value="brainbox@pve!wiki" autocomplete="off"></label>
               <label>Secret (value) <input type="password" name="secret" required autocomplete="new-password"></label>
@@ -348,7 +348,7 @@ html.embed, html.embed body { height: auto; background: transparent; }
         </ol></div>
       <div class="card"><h2>Server an einem anderen Standort</h2>
         <p class="hint" style="margin-top:-4px">Brainbox kommt nicht an den Server heran – er steht woanders, hinter einer anderen Firewall. Dann meldet er sich selbst: Ein kleiner Brainbox-Agent liest dort alle 5 Minuten VMs und Container (nur lesend) und schickt sie an <code>${esc(S.wiki.url || "deine Brainbox")}</code>. Offene Ports oder ein VPN braucht es dafür nicht.</p>
-        <form class="row" data-form="proxmox-agent"><input class="grow" type="text" name="name" required placeholder="Name, z. B. standort-2" pattern="[a-z0-9][a-z0-9.\\-]{0,62}" title="Kleinbuchstaben, Ziffern, Punkt und Bindestrich, z. B. zuhause oder ph.morn.lan" aria-label="Name des Servers" autocomplete="off"><button class="btn primary" type="submit">Befehl erzeugen</button></form>
+        <form class="row" data-form="proxmox-agent"><input class="grow" type="text" name="name" required placeholder="Name, z. B. standort-2" maxlength="100" aria-label="Name des Servers" autocomplete="off"><button class="btn primary" type="submit">Befehl erzeugen</button></form>
         <div id="agent-result"></div></div>
       <p class="hint">Mit Tags und <a href="#bereiche" data-go="bereiche">Zuordnungsregeln</a> landen die VMs auch in deinen Bereichen. Im Terminal geht dasselbe mit <code>brainbox-connect proxmox add …</code>, <code>proxmox agent NAME</code> und <code>proxmox rename ALT NEU</code>.</p>`;
   }
@@ -872,10 +872,10 @@ html.embed, html.embed body { height: auto; background: transparent; }
     const d = Object.fromEntries(new FormData(f).entries());
     const btn = f.querySelector('button[type="submit"]');
     const kind = f.dataset.form;
-    if (kind === "proxmox") act("proxmox/add", { name: d.name.trim().toLowerCase(), url: d.url.trim(), tokenId: d.tokenId.trim(), secret: d.secret, insecure: !!f.insecure.checked }, btn, "proxmox");
+    if (kind === "proxmox") act("proxmox/add", { name: d.name.trim(), url: d.url.trim(), tokenId: d.tokenId.trim(), secret: d.secret, insecure: !!f.insecure.checked }, btn, "proxmox");
     if (kind === "netbird") act("netbird", { url: d.url.trim(), token: d.token }, btn, "netbird");
-    if (kind === "proxmox-agent") act("proxmox/agent", { name: d.name.trim().toLowerCase() }, btn, "proxmox");
-    if (kind === "proxmox-rename") act("proxmox/rename", { name: f.dataset.name, newName: d.newName.trim().toLowerCase() }, btn, "proxmox");
+    if (kind === "proxmox-agent") act("proxmox/agent", { name: d.name.trim() }, btn, "proxmox");
+    if (kind === "proxmox-rename") act("proxmox/rename", { name: f.dataset.name, newName: d.newName.trim() }, btn, "proxmox");
     if (kind === "link") act("link", { email: (d.email || "").trim() }, btn, "link");
     if (kind === "login") {
       const values = {};

@@ -332,13 +332,22 @@ pve_remove() { # pve_remove NAME
   pve_migrate
   [[ "$(pve_json | jq --arg n "$name" 'map(select(.name == $n)) | length')" != "0" ]] || fail "Kein Proxmox-Server '${name}'."
   pve_save "$(pve_json | jq --arg n "$name" 'map(select(.name != $n))')"
-  rm -f "${AGENT_DIR}/${name}.json"
+  rm -f "$(agent_file "$name")"
   ok "Proxmox-Server '${name}' entfernt – seine Einträge werden beim Abgleich archiviert (nicht gelöscht)."
   if [[ -n "$(conf_get OUTLINE_API_KEY)" ]]; then run_sync || true; fi
 }
 
-# Servernamen: Kleinbuchstaben, Ziffern, Bindestrich und Punkt (z. B. zuhause, ph.morn.lan); kein "..", vorne/hinten kein Punkt
-pve_clean_name() { echo "${1:-}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9.-' | sed -E 's/\.\.+/./g; s/^[.-]+//' | head -c 63 | sed -E 's/\.+$//'; }
+# Servernamen sind frei wählbar (Punkte, Leerzeichen, Großbuchstaben, Umlaute …): nur Steuerzeichen raus,
+# Leerraum vorne und hinten weg, höchstens 100 Zeichen
+pve_clean_name() {
+  local n
+  n="$(printf '%s' "${1:-}" | tr -d '\000-\037\177')"
+  n="${n#"${n%%[![:space:]]*}"}"
+  n="${n%"${n##*[![:space:]]}"}"
+  printf '%s' "${n:0:100}"
+}
+# Datei der letzten Agent-Meldung – Name kodiert wie in Zentrale und Abgleich (jq @uri)
+agent_file() { printf '%s/%s.json' "$AGENT_DIR" "$(jq -rn --arg n "$1" '$n | @uri')"; }
 pve_has() { [[ "$(pve_json | jq --arg n "$1" 'map(select(.name == $n)) | length')" != "0" ]]; }
 
 pve_agent() { # pve_agent NAME [--raw] – Server an anderem Standort: meldet sich selbst über den Brainbox-Agenten
@@ -386,10 +395,10 @@ pve_rename() { # pve_rename ALT NEU – Namen ändern; Wiki-Seiten werden mit um
       tmp="$(mktemp "${STATE}.XXXX")"
       jq --arg o "$old" --arg n "$new" '.docs |= with_entries(
         if .key == ("pvesrv:" + $o) then .key = ("pvesrv:" + $n)
-        elif (.key | startswith("pve:" + $o + ":")) then .key = ("pve:" + $n + ":" + (.key | ltrimstr("pve:" + $o + ":")))
+        elif (.key | startswith("pve:" + $o + ":")) and (.key | ltrimstr("pve:" + $o + ":") | test("^[0-9]+$")) then .key = ("pve:" + $n + ":" + (.key | ltrimstr("pve:" + $o + ":")))
         else . end)' "$STATE" >"$tmp" && chmod --reference="$STATE" "$tmp" && mv "$tmp" "$STATE"
     fi
-    if [[ -f "${AGENT_DIR}/${old}.json" ]]; then mv "${AGENT_DIR}/${old}.json" "${AGENT_DIR}/${new}.json"; fi
+    if [[ -f "$(agent_file "$old")" ]]; then mv "$(agent_file "$old")" "$(agent_file "$new")"; fi
   ) 9>"$SYNC_LOCK" || fail "Der Abgleich läuft gerade – bitte gleich nochmal versuchen."
   ok "Proxmox-Server '${old}' heißt jetzt '${new}'."
   if [[ -n "$(conf_get OUTLINE_API_KEY)" ]]; then run_sync || true; fi
@@ -429,7 +438,7 @@ pve_menu() {
       case "$what" in
       pruefen) clear; (run_sync --test pve "$choice") || true; read -rp "  Weiter mit Enter … " _ ;;
       umbenennen)
-        name="$(wt --title "SERVER ${choice}" --inputbox "Neuer Name (Kleinbuchstaben, Ziffern, Punkt, Bindestrich – z. B. ph.morn.lan)" 9 66 "$choice")" || continue
+        name="$(wt --title "SERVER ${choice}" --inputbox "Neuer Name (frei wählbar, z. B. ph.morn.lan oder Zuhause Keller)" 9 66 "$choice")" || continue
         clear; (pve_rename "$choice" "$name") || true; read -rp "  Weiter mit Enter … " _ ;;
       befehl) clear; (pve_agent "$choice") || true; read -rp "  Weiter mit Enter … " _ ;;
       entfernen)

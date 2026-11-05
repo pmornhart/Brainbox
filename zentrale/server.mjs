@@ -53,7 +53,9 @@ function parseEnv(text) {
 const readJson = (file, fallback) => { try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return fallback; } };
 // Proxmox-Server an anderen Standorten melden sich selbst (connect/pve-agent.sh) – ihre letzte Meldung liegt hier
 const AGENT_DIR = process.env.BRAINBOX_AGENT_DIR || "/var/lib/brainbox/agent";
-const agentSeen = (name) => readJson(path.join(AGENT_DIR, `${name}.json`), null)?.receivedAt || null;
+// Dateiname der letzten Agent-Meldung: Servernamen sind frei (Leerzeichen, „/“, Umlaute …) – deshalb kodiert wie jq @uri
+const agentFileName = (name) => `${encodeURIComponent(name).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)}.json`;
+const agentSeen = (name) => readJson(path.join(AGENT_DIR, agentFileName(name)), null)?.receivedAt || null;
 const stripAnsi = (s) => String(s || "").replace(/\x1b\[[0-9;]*[A-Za-z]/g, "").replace(/\r/g, "");
 const send = (res, code, body, type = "application/json; charset=utf-8") => {
   const data = typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body);
@@ -197,7 +199,7 @@ async function status(req, me) {
     sync: {
       lastRun: state.lastRun || null, timer: timer.output.trim() === "active", bot: !!conn.OUTLINE_API_KEY,
       counts: {
-        guests: docs.filter((k) => /^pve:[^:]+:\d+$/.test(k)).length,
+        guests: docs.filter((k) => /^pve:.+:\d+$/.test(k)).length,
         peers: docs.filter((k) => /^nb:/.test(k) && !["nb:overview", "nb:domains"].includes(k)).length,
         areas: areas.length,
       },
@@ -250,28 +252,29 @@ function summary(me) {
 const LOGIN_KEYS = new Set(["URL", "DEFAULT_LANGUAGE", "SMTP_HOST", "SMTP_PORT", "SMTP_SECURE", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM_EMAIL", "SMTP_SERVICE",
   "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_TENANT_ID", "DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET", "DISCORD_SERVER_ID",
   "OIDC_DISPLAY_NAME", "OIDC_ISSUER_URL", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET"]);
-// Servernamen: Kleinbuchstaben, Ziffern, Bindestrich und Punkt (z. B. „zuhause“ oder „ph.morn.lan“), kein „..“, nicht mit Punkt am Ende
-const NAME_RE = /^(?!.*\.\.)[a-z0-9][a-z0-9.-]{0,62}(?<!\.)$/;
-const NAME_HINT = "Name: Kleinbuchstaben, Ziffern, Punkt und Bindestrich, z. B. zuhause oder ph.morn.lan";
+// Servernamen sind frei wählbar (Punkte, Leerzeichen, Großbuchstaben, Umlaute …) – nur nicht leer, einzeilig, ohne Steuerzeichen
+const NAME_MAX = 100;
+const validName = (v) => typeof v === "string" && v.trim() === v && v.length > 0 && v.length <= NAME_MAX && !/[\u0000-\u001f\u007f]/.test(v);
+const NAME_HINT = `Name fehlt oder ist zu lang (höchstens ${NAME_MAX} Zeichen, eine Zeile).`;
 const ONE_LINE = (v) => typeof v === "string" && !/[\r\n\0]/.test(v) && v.length < 2000;
 
 const actions = {
   "proxmox/add": async (b) => {
-    if (!NAME_RE.test(b.name || "")) return { ok: false, output: NAME_HINT };
+    if (!validName(b.name)) return { ok: false, output: NAME_HINT };
     if (![b.url, b.tokenId, b.secret].every(ONE_LINE) || !b.url || !b.tokenId || !b.secret) return { ok: false, output: "Adresse, Token-ID und Secret ausfüllen." };
     return run("brainbox-connect", ["proxmox", "add", b.name, b.url, b.tokenId, b.secret, ...(b.insecure ? ["--insecure"] : [])]);
   },
-  "proxmox/remove": async (b) => (NAME_RE.test(b.name || "") ? run("brainbox-connect", ["proxmox", "remove", b.name]) : { ok: false, output: "Unbekannter Server." }),
+  "proxmox/remove": async (b) => (validName(b.name) ? run("brainbox-connect", ["proxmox", "remove", b.name]) : { ok: false, output: "Unbekannter Server." }),
   "proxmox/agent": async (b) => {
-    if (!NAME_RE.test(b.name || "")) return { ok: false, output: NAME_HINT };
+    if (!validName(b.name)) return { ok: false, output: NAME_HINT };
     const r = await run("brainbox-connect", ["proxmox", "agent", b.name, "--raw"], { timeout: 60000 });
     try { return { ok: r.ok, data: JSON.parse(r.output.trim().split("\n").pop()) }; } catch { return { ok: false, output: r.output || "Befehl konnte nicht erzeugt werden." }; }
   },
   "proxmox/rename": async (b) => {
-    if (!NAME_RE.test(b.name || "") || !NAME_RE.test(b.newName || "")) return { ok: false, output: NAME_HINT };
+    if (!validName(b.name) || !validName(b.newName)) return { ok: false, output: NAME_HINT };
     return run("brainbox-connect", ["proxmox", "rename", b.name, b.newName], { timeout: 300000 });
   },
-  "proxmox/test": async (b) => run("brainbox-connect", ["proxmox", "test", ...(NAME_RE.test(b.name || "") ? [b.name] : [])], { timeout: 60000 }),
+  "proxmox/test": async (b) => run("brainbox-connect", ["proxmox", "test", ...(validName(b.name) ? [b.name] : [])], { timeout: 60000 }),
   netbird: async (b) => ([b.url, b.token].every((x) => ONE_LINE(x) && x) ? run("brainbox-connect", ["netbird", b.url, b.token]) : { ok: false, output: "Adresse und Token ausfüllen." }),
   "netbird/remove": async () => run("brainbox-connect", ["netbird", "remove"]),
   claude: async () => {
@@ -368,7 +371,7 @@ async function agentPush(req, res) {
   const snap = cleanSnapshot(body, srv);
   const first = !agentSeen(srv.name);
   fs.mkdirSync(AGENT_DIR, { recursive: true, mode: 0o700 });
-  const file = path.join(AGENT_DIR, `${srv.name}.json`);
+  const file = path.join(AGENT_DIR, agentFileName(srv.name));
   fs.writeFileSync(`${file}.tmp`, JSON.stringify(snap), { mode: 0o600 });
   fs.renameSync(`${file}.tmp`, file);
   // Erste Meldung: gleich abgleichen, damit der Server sofort im Wiki steht
