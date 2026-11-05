@@ -17,6 +17,7 @@ community-scripts Outline-Skripts (https://community-scripts.org/scripts/outline
 - `teile-einrichten.sh` – installiert Befehle, Abgleich und Zentrale aus dem Bausatz (von install und update aufgerufen).
 - `update.sh` – wird zu `/usr/bin/update` (auch `brainbox-update`); aktualisiert sich selbst aus `main`, sichert DB und `.env`, Rollback bei Fehler.
 - `brand/apply.mjs` – Branding-Patch auf den Outline-Quellcode vor dem Bauen (Farben, Schrift, Logo, Name, Zentrale-Link, Update-Symbol). Muss idempotent bleiben.
+- `brand/symbole/` – eigener Symbolsatz statt `outline-icons` (Vite-Alias). `zuordnung.mjs` ändern, dann `node brand/symbole/erzeugen.mjs <phosphor>/assets` → `brand/overrides/app/components/Icons/BrainboxIconSet.tsx`.
 - `zentrale/server.mjs` + `zentrale/app.html` – Brainbox-Zentrale und Tor zum Wiki (Node ohne Abhängigkeiten), Update-Prüfung alle 6 Std.
   `app.html` ist auch in die Live-Demo einbettbar (`BRAINBOX_ROOT`, `BRAINBOX_MOCK`, `BRAINBOX_LOGO`).
 - `brainbox-login.sh` – wird zu `/usr/bin/brainbox-login`; Adresse, E-Mail, Passkeys, Google, Microsoft, Discord, OIDC, Sprache.
