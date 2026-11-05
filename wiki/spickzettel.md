@@ -41,7 +41,9 @@ Auf dem Mac statt `Strg` die Taste `⌘`.
 |---|---|
 | einen Proxmox-Server verbinden | [Einstellungen → Brainbox → Proxmox-Server](/settings/brainbox-proxmox) |
 | NetBird verbinden | [Einstellungen → Brainbox → NetBird](/settings/brainbox-netbird) |
-| Claude mitschreiben lassen | [Einstellungen → Brainbox → Claude](/settings/brainbox-claude) |
+| Claude verbinden | [Einstellungen → Brainbox → Künstliche Intelligenz](/settings/brainbox-claude) |
+| einen Proxmox an einem anderen Standort verbinden | [Proxmox-Server](/settings/brainbox-proxmox) → „Server an einem anderen Standort“ |
+| einen Server umbenennen | [Proxmox-Server](/settings/brainbox-proxmox) → „Umbenennen“ |
 | meinen Namen, mein Bild, hell/dunkel, E-Mails ändern | Klick auf **deinen Namen unten links** → Konto |
 | jemanden einladen | [Einstellungen → Wiki → Mitglieder](/settings/users) |
 | Anmeldung per E-Mail, Google … | [Einstellungen → Brainbox → Anmeldung](/settings/brainbox-anmeldung) |
@@ -58,5 +60,7 @@ Auf dem Mac statt `Strg` die Taste `⌘`.
 | `brainbox-login link` | einmaliger Login-Link, 60 Minuten gültig |
 | `brainbox-login` | Anmeldewege einrichten |
 | `brainbox-connect` | Proxmox, NetBird und Claude verbinden |
+| `brainbox-connect proxmox agent NAME` | Server an einem anderen Standort: Befehl für dort |
+| `brainbox-connect proxmox rename ALT NEU` | Server umbenennen |
 | `brainbox-connect sync` | sofort abgleichen |
 | `brainbox-connect status` | was verbunden ist |

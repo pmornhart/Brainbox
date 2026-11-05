@@ -8,7 +8,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/Lizenz-MIT-2f7a5b?labelColor=0B1410" alt="Lizenz: MIT"></a>
 </p>
 
-<p align="center"><b>Dein Wiki fürs Homelab.</b> Ein Befehl in der Proxmox-Shell, und es steht – mit eigenem Gesicht, Login-Link,<br>allen Proxmox-Servern und NetBird automatisch drin, nach Bereichen sortiert, und Claude schreibt mit.</p>
+<p align="center"><b>Dein Wiki fürs Homelab.</b> Ein Befehl in der Proxmox-Shell, und es steht – mit eigenem Gesicht, Login-Link,<br>allen Proxmox-Servern und NetBird automatisch drin, nach Bereichen sortiert, und Claude packt mit an.</p>
 
 <p align="center">
   <a href="#-schnellstart">Schnellstart</a> ·
@@ -16,7 +16,7 @@
   <a href="#%EF%B8%8F-proxmox-server">Proxmox</a> ·
   <a href="#-netbird">NetBird</a> ·
   <a href="#%EF%B8%8F-bereiche">Bereiche</a> ·
-  <a href="#-claude">Claude</a> ·
+  <a href="#-künstliche-intelligenz">KI</a> ·
   <a href="#-anmelden">Anmelden</a> ·
   <a href="docs/proxmox-quickstart.md">Quick-Start-Guide</a>
 </p>
@@ -33,12 +33,12 @@ Brainbox ist ein eigenständiges Wiki für dein Homelab: Editor mit Echtzeit-Bea
 |---|---|
 | 🎨 **Eigenes Gesicht** | Brainbox-Logo, eigener Name, Schrift Geist und das Farbschema „Homelab-Konsole“ – dunkel als Standard, hell auf Wunsch. |
 | 🏠 **Startseite** | Begrüßung und dein Homelab auf einen Blick: laufende VMs je Server, NetBird-Geräte online, Bereiche, Version – mit Schnellzugriffen. |
-| ⚙️ **Aufgeräumte Einstellungen** | Drei Gruppen statt zwanzig Punkten: *Brainbox* (Proxmox-Server, NetBird, Claude, Anmeldung, Update), *Wiki* und *Konto*. Jede Seite erklärt Schritt für Schritt, was zu tun ist. |
+| ⚙️ **Aufgeräumte Einstellungen** | Drei Gruppen statt zwanzig Punkten: *Brainbox* (Proxmox-Server, NetBird, Künstliche Intelligenz, Anmeldung, Update), *Wiki* und *Konto*. Jede Seite erklärt Schritt für Schritt, was zu tun ist. |
 | 📖 **Anleitung im Wiki** | Sammlung „Start“ mit Anleitung und Spickzettel – liegt nach der Installation bereit und wird bei Updates aufgefrischt. |
 | 🖥️ **Beliebig viele Proxmox-Server** | Jeder Server bekommt eine eigene Seite mit Nodes und Auslastung, darunter je VM und Container ein Eintrag. Neue erscheinen nach spätestens 5 Minuten. |
 | 🌐 **NetBird** | Geräte, Netzwerke und Domains – auch vom NetBird-Reverse-Proxy –, automatisch mit den passenden VMs verknüpft. |
 | 🗂️ **Bereiche** | Regeln wie `*.morninghosting.de → Minecraft-Server` sortieren Domains, VMs und Geräte, mit Unterbereichen. |
-| 🤖 **Claude schreibt mit** | Eigenes Konto „Claude“ über den MCP-Anschluss, in der Claude-App wie in Claude Code. |
+| 🤖 **Claude packt mit an** | Über den MCP-Anschluss mit deiner Anmeldung: Claude schreibt im Wiki und bedient Brainbox – Proxmox-Server hinzufügen und umbenennen, NetBird, Abgleich, Update. |
 | 📚 **Ein Container = ein Wiki** | Wiki und Admin legt die Installation an, am Ende gibt es einen Login-Link. Weiteres Wiki: Befehl nochmal, andere Domain. |
 | 🔑 **Sechs Wege zum Anmelden** | E-Mail-Link, Passkey, Google, Microsoft, Discord, eigener Login-Dienst. Rein kommt nur, wer eingeladen ist. |
 | 🏷️ **Eigene Versionen** | Brainbox 1.1.0 mit fest getestetem Kern. Neue Versionen zeigt ein Update-Symbol im Wiki an. `update` sichert vorher alles und kehrt bei Fehlern zur alten Version zurück. |
@@ -93,21 +93,21 @@ Oben in der Seitenleiste unter **Einstellungen**. Statt einer langen Liste gibt 
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/einstellungen.png" alt="Einstellungen: Gruppen Brainbox, Wiki und Konto, rechts die Übersicht mit Kacheln für Proxmox, NetBird, Claude und Version"></td>
-    <td width="50%"><img src="docs/screenshots/einstellungen-proxmox.png" alt="Einstellungen → Proxmox-Server: verbundene Server und Formular zum Hinzufügen"></td>
+    <td width="50%"><img src="docs/screenshots/einstellungen-proxmox.png" alt="Einstellungen → Proxmox-Server: drei Server, einer an einem anderen Standort, mit Prüfen, Umbenennen und Entfernen"></td>
   </tr>
   <tr>
     <td align="center"><sub>Übersicht: alles auf einen Blick, Abgleich, Login-Link</sub></td>
-    <td align="center"><sub>Proxmox-Server: prüfen, entfernen, neuen hinzufügen</sub></td>
+    <td align="center"><sub>Proxmox-Server: im selben Netz oder an anderen Standorten, prüfen, umbenennen</sub></td>
   </tr>
 </table>
 
 | Gruppe | Darin |
 |---|---|
-| **Brainbox** (nur Admins) | Übersicht · Proxmox-Server · NetBird · Claude · Anmeldung · Version & Update |
+| **Brainbox** (nur Admins) | Übersicht · Proxmox-Server · NetBird · Künstliche Intelligenz · Anmeldung · Version & Update |
 | **Wiki** | Allgemein · Mitglieder · Sicherheit · Vorlagen · Export |
 | **Konto** | Profil · Darstellung · Benachrichtigungen · Passkeys – auch mit einem Klick auf deinen Namen unten links |
 
-Alle Seiten sehen gleich aus: Karten mit kurzer Erklärung, Schalter mit einem Satz dazu, was sie bewirken, und Hinweise, wo es weitergeht. Unter *Mitglieder* lädst du Leute ein, änderst Rollen oder sperrst Zugänge. Die Konten von Brainbox selbst (Automatik, Claude) sind markiert. *Vorlagen* legt auf Wunsch drei Beispiele an (Server-Steckbrief, Anleitung, Störung), *Export* packt das ganze Wiki als Markdown, HTML oder JSON zum Herunterladen.
+Alle Seiten sehen gleich aus: Karten mit kurzer Erklärung, Schalter mit einem Satz dazu, was sie bewirken, und Hinweise, wo es weitergeht. Unter *Mitglieder* lädst du Leute ein, änderst Rollen oder sperrst Zugänge. Das Konto von Brainbox selbst (Automatik) ist markiert. *Vorlagen* legt auf Wunsch drei Beispiele an (Server-Steckbrief, Anleitung, Störung), *Export* packt das ganze Wiki als Markdown, HTML oder JSON zum Herunterladen.
 
 <p align="center"><img src="docs/screenshots/einstellungen-mitglieder.png" alt="Einstellungen → Wiki → Mitglieder: Einladen-Formular und Liste der Mitglieder mit Rollen" width="900"></p>
 
@@ -134,6 +134,16 @@ pveum user token add brainbox@pve wiki --privsep 0
 # 2. im Brainbox-Container: verbinden
 brainbox-connect proxmox add hetzner https://203.0.113.10:8006 'brainbox@pve!wiki' <value> --insecure
 ```
+
+**Server an einem anderen Standort** – Brainbox kommt nicht heran (andere Firewall, kein VPN)? Dann meldet sich der Server selbst. Unter *Einstellungen → Brainbox → Proxmox-Server → Server an einem anderen Standort* einen Namen eintragen und den erzeugten Befehl einmal in der Shell des entfernten Proxmox-Hosts ausführen:
+
+```bash
+curl -fsSL https://brainbox.morncloud.de/zentrale/agent.sh | bash -s -- install https://brainbox.morncloud.de <Schlüssel>
+```
+
+Der kleine Brainbox-Agent liest dort alle 5 Minuten Nodes, VMs und Container (nur lesend, über `pvesh`) und schickt sie an deine Brainbox – ohne offene Ports. Von den VM-Einstellungen gehen nur Beschreibung, Betriebssystem, Name, Tags und Netzwerk mit, keine Passwörter oder SSH-Schlüssel. Im Terminal: `brainbox-connect proxmox agent NAME`. Entfernen auf dem Server: `brainbox-agent uninstall`.
+
+**Umbenennen** – jederzeit, auch wenn der Server schon verbunden ist: in den Einstellungen bei jedem Server „Umbenennen“ oder `brainbox-connect proxmox rename proxmox-2 zuhause`. Die Wiki-Seiten bekommen den neuen Namen, Notizen und Links bleiben.
 
 <table>
   <tr>
@@ -176,14 +186,27 @@ Muster: Domains mit `*`, `name:mc-*` für Namen, `tag:` für Proxmox-Tags, `grup
   </tr>
 </table>
 
-## 🤖 Claude
+## 🤖 Künstliche Intelligenz
 
-Unter *Einstellungen → Brainbox → Claude* auf „Claude einrichten“ (oder `brainbox-connect claude`). Brainbox legt das Konto „Claude“ und die gemeinsame Sammlung „Von Claude“ an, erstellt einen Schlüssel und gibt Claude beim Verbinden eine Anweisung mit: auf Deutsch, erst suchen, dann ergänzen, keine Passwörter.
+Claude arbeitet direkt in deiner Brainbox – **mit deiner Anmeldung**, ohne eigenes Konto. Unter *Einstellungen → Brainbox → Künstliche Intelligenz* stehen Adresse und Anleitung (oder `brainbox-connect claude`).
 
-- **Claude-App:** Einstellungen → Connectors → `https://brainbox.morncloud.de/mcp`, im Anmeldefenster als Claude zulassen
-- **Claude Code:** `claude mcp add --transport http brainbox https://brainbox.morncloud.de/mcp --header "Authorization: Bearer …"`
+- **Claude-App:** Einstellungen → Connectors → Benutzerdefinierten Connector hinzufügen → `https://brainbox.morncloud.de/mcp` → im Brainbox-Fenster anmelden und zulassen
+- **Claude Code:** `claude mcp add --transport http brainbox https://brainbox.morncloud.de/mcp`, dann `/mcp` → anmelden
 
-<p align="center"><img src="docs/screenshots/claude-eintrag.png" alt="Eintrag, den Claude geschrieben hat" width="640"></p>
+Claude kann dann im Wiki suchen, lesen und schreiben – und Brainbox bedienen (nur für Admins): Status abfragen, Proxmox-Server hinzufügen (im selben Netz oder an einem anderen Standort), umbenennen, prüfen, entfernen, NetBird verbinden, abgleichen, Updates einspielen. Beim Verbinden bekommt Claude eine Beschreibung von Brainbox mit: wie das Wiki aufgebaut ist, was der Abgleich überschreibt und wie man Server hinzufügt. Eigene Anweisungen (Ton, Vorlieben) trägst du auf derselben Seite ein. Ein Schalter dort sperrt KI-Zugriffe ganz.
+
+Zum Beispiel: *„Füg meinen Proxmox in Frankfurt hinzu, an den kommt Brainbox nicht direkt ran.“* · *„Benenn proxmox-2 in zuhause um.“* · *„Welche Domains zeigen auf mc-proxy?“* · *„Gibt es ein Update? Dann spiel es ein.“*
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/einstellungen-ki.png" alt="Einstellungen → Künstliche Intelligenz: MCP-Anschluss, Adresse und Anleitung zum Verbinden"></td>
+    <td width="50%"><img src="docs/screenshots/claude-eintrag.png" alt="Eintrag, den Claude geschrieben hat"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Künstliche Intelligenz: an/aus, Adresse, Anleitung, eigene Anweisungen</sub></td>
+    <td align="center"><sub>Ein Eintrag, den Claude geschrieben hat</sub></td>
+  </tr>
+</table>
 
 ## 🔑 Anmelden
 
@@ -226,7 +249,7 @@ Vorher sichert `update` Datenbank und Einstellungen nach `/root/brainbox-backups
 ```mermaid
 flowchart LR
   U["Du im Browser<br/>oder auf dem Handy"] -- HTTPS --> RP["Reverse-Proxy<br/>brainbox.morncloud.de"]
-  C["Claude<br/>App und Code"] -- "MCP, eigenes Konto" --> RP
+  C["Claude<br/>App und Code"] -- "MCP, deine Anmeldung" --> RP
   RP --> Z
   subgraph CT["LXC-Container 'brainbox'"]
     direction TB
@@ -275,7 +298,8 @@ flowchart LR
 
 - **Nur mit Einladung:** Die Installation schaltet „Einladungen erforderlich“ ein.
 - **Brainbox-Einstellungen nur für Admins:** Die Zentrale prüft die Anmeldung im Wiki und nimmt Änderungen nur von der eigenen Seite an.
-- **Proxmox nur lesen:** Zugang `brainbox@pve` mit Rolle PVEAuditor, eigener Token je Wiki.
+- **Proxmox nur lesen:** Zugang `brainbox@pve` mit Rolle PVEAuditor, eigener Token je Wiki. Der Agent an anderen Standorten liest nur per `pvesh`, schickt keine Passwörter oder SSH-Schlüssel mit und hat einen eigenen Schlüssel je Server – Brainbox speichert davon nur den Hash.
+- **Claude nur mit deinen Rechten:** Claude meldet sich über den MCP-Anschluss mit deinem Konto an. Brainbox bedienen dürfen nur Admins; die Werkzeuge sprechen die Zentrale über einen internen Schlüssel an, der nur auf dem Container selbst gilt.
 - **Geheimnisse bleiben im Container:** Tokens und Schlüssel liegen nur für root lesbar in `/etc/brainbox/`, nie im Wiki.
 - **Login-Links** gelten einmal und 60 Minuten.
 

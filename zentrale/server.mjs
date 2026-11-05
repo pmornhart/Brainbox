@@ -15,6 +15,7 @@ import net from "node:net";
 import fs from "node:fs";
 import path from "node:path";
 import { execFile, spawn } from "node:child_process";
+import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -50,6 +51,9 @@ function parseEnv(text) {
   return out;
 }
 const readJson = (file, fallback) => { try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return fallback; } };
+// Proxmox-Server an anderen Standorten melden sich selbst (connect/pve-agent.sh) – ihre letzte Meldung liegt hier
+const AGENT_DIR = process.env.BRAINBOX_AGENT_DIR || "/var/lib/brainbox/agent";
+const agentSeen = (name) => readJson(path.join(AGENT_DIR, `${name}.json`), null)?.receivedAt || null;
 const stripAnsi = (s) => String(s || "").replace(/\x1b\[[0-9;]*[A-Za-z]/g, "").replace(/\r/g, "");
 const send = (res, code, body, type = "application/json; charset=utf-8") => {
   const data = typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body);
@@ -182,7 +186,8 @@ async function status(req, me) {
     wiki: { url, name: me?.team?.name || "Brainbox", inviteRequired: !!me?.team?.inviteRequired, language: env.DEFAULT_LANGUAGE || "" },
     user: { name: me?.user?.name || "" },
     proxmox: (servers || []).map((x) => ({
-      name: x.name, url: x.url, tokenId: x.tokenId, insecure: !!x.insecure,
+      name: x.name, url: x.url || "", tokenId: x.tokenId || "", insecure: !!x.insecure,
+      mode: x.mode === "agent" ? "agent" : "api", lastSeen: x.mode === "agent" ? agentSeen(x.name) : null,
       wikiUrl: state.docs?.[`pvesrv:${x.name}`]?.url || null,
       online: state.summary?.proxmox?.servers?.find((y) => y.name === x.name)?.ok ?? null,
       guests: state.summary?.proxmox?.servers?.find((y) => y.name === x.name)?.guests ?? null,
@@ -255,6 +260,15 @@ const actions = {
     return run("brainbox-connect", ["proxmox", "add", b.name, b.url, b.tokenId, b.secret, ...(b.insecure ? ["--insecure"] : [])]);
   },
   "proxmox/remove": async (b) => (NAME_RE.test(b.name || "") ? run("brainbox-connect", ["proxmox", "remove", b.name]) : { ok: false, output: "Unbekannter Server." }),
+  "proxmox/agent": async (b) => {
+    if (!NAME_RE.test(b.name || "")) return { ok: false, output: "Name: nur Kleinbuchstaben, Ziffern und Bindestrich, z. B. standort-2" };
+    const r = await run("brainbox-connect", ["proxmox", "agent", b.name, "--raw"], { timeout: 60000 });
+    try { return { ok: r.ok, data: JSON.parse(r.output.trim().split("\n").pop()) }; } catch { return { ok: false, output: r.output || "Befehl konnte nicht erzeugt werden." }; }
+  },
+  "proxmox/rename": async (b) => {
+    if (!NAME_RE.test(b.name || "") || !NAME_RE.test(b.newName || "")) return { ok: false, output: "Name: nur Kleinbuchstaben, Ziffern und Bindestrich, z. B. zuhause" };
+    return run("brainbox-connect", ["proxmox", "rename", b.name, b.newName], { timeout: 300000 });
+  },
   "proxmox/test": async (b) => run("brainbox-connect", ["proxmox", "test", ...(NAME_RE.test(b.name || "") ? [b.name] : [])], { timeout: 60000 }),
   netbird: async (b) => ([b.url, b.token].every((x) => ONE_LINE(x) && x) ? run("brainbox-connect", ["netbird", b.url, b.token]) : { ok: false, output: "Adresse und Token ausfüllen." }),
   "netbird/remove": async () => run("brainbox-connect", ["netbird", "remove"]),
@@ -301,9 +315,84 @@ const STATIC = {
   "/zentrale/": [path.join(HERE, "app.html"), "text/html; charset=utf-8"],
   "/zentrale/logo.svg": [path.join(KIT, "brand/logo.svg"), "image/svg+xml"],
   "/zentrale/icon-32.png": [path.join(KIT, "brand/icons/app-32.png"), "image/png"],
+  "/zentrale/agent.sh": [path.join(KIT, "connect/pve-agent.sh"), "text/x-shellscript; charset=utf-8"],
   "/zentrale/fonts/Geist.woff2": [path.join(KIT, "brand/fonts/Geist.woff2"), "font/woff2"],
   "/zentrale/fonts/GeistMono.woff2": [path.join(KIT, "brand/fonts/GeistMono.woff2"), "font/woff2"],
 };
+
+// --- Brainbox-Agent: Proxmox-Server an anderen Standorten melden sich selbst ----------------------------
+const AGENT_MAX_BYTES = 16 * 1024 * 1024;
+const NODE_KEY = /^[\w.-]+\/(lxc|qemu)\/\d+$/; // z. B. „pve1/qemu/101“
+const KEEP_CONF = /^(description|ostype|hostname|name|tags|net\d+)$/; // z. B. „net0“
+const sha256 = (s) => crypto.createHash("sha256").update(String(s)).digest("hex");
+const sameSecret = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+async function readBody(req, max) {
+  const chunks = [];
+  let size = 0;
+  for await (const c of req) { size += c.length; if (size > max) return null; chunks.push(c); }
+  try { return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); } catch { return undefined; }
+}
+function agentFor(token) {
+  if (!/^[A-Za-z0-9_-]{20,200}$/.test(token)) return null;
+  const h = sha256(token);
+  const list = readJson(path.join(CONF_DIR, "proxmox.json"), []);
+  return (Array.isArray(list) ? list : []).find((x) => x?.mode === "agent" && /^[a-f0-9]{64}$/.test(x.tokenHash || "") && sameSecret(x.tokenHash, h)) || null;
+}
+// Nur behalten, was der Abgleich braucht – keine Passwörter oder Schlüssel aus den VM-Einstellungen
+function cleanSnapshot(b, srv) {
+  const pick = (o, keys) => Object.fromEntries(keys.filter((k) => o && o[k] !== undefined && o[k] !== null).map((k) => [k, o[k]]));
+  const configs = {};
+  for (const [k, c] of Object.entries(b.configs || {})) {
+    if (NODE_KEY.test(k) && c && typeof c === "object") configs[k] = Object.fromEntries(Object.entries(c).filter(([x]) => KEEP_CONF.test(x)));
+  }
+  const interfaces = {};
+  for (const [k, v] of Object.entries(b.interfaces || {})) if (NODE_KEY.test(k) && v && typeof v === "object") interfaces[k] = v;
+  return {
+    name: srv.name, receivedAt: new Date().toISOString(), agentVersion: String(b.agentVersion || ""),
+    host: String(b.host || "").slice(0, 200), url: /^https?:\/\/[\w.:[\]-]+$/.test(b.url || "") ? b.url : "",
+    version: pick(b.version || {}, ["version", "release", "repoid"]),
+    nodes: (Array.isArray(b.nodes) ? b.nodes : []).map((n) => pick(n, ["node", "status", "cpu", "maxcpu", "mem", "maxmem", "uptime"])),
+    resources: (Array.isArray(b.resources) ? b.resources : []).filter((r) => r && r.vmid)
+      .map((r) => pick(r, ["id", "vmid", "name", "node", "type", "status", "maxcpu", "maxmem", "maxdisk", "uptime", "tags", "template"])),
+    configs, interfaces,
+  };
+}
+async function agentPush(req, res) {
+  const srv = agentFor(String(req.headers.authorization || "").replace(/^Bearer\s+/i, ""));
+  if (!srv) return send(res, 401, { ok: false, error: "Token unbekannt – Befehl in Einstellungen → Proxmox-Server neu erzeugen." });
+  const body = await readBody(req, AGENT_MAX_BYTES);
+  if (body === null) return send(res, 413, { ok: false, error: "zu groß" });
+  if (!body || body.agent !== 1) return send(res, 400, { ok: false, error: "Unbekanntes Format" });
+  const snap = cleanSnapshot(body, srv);
+  const first = !agentSeen(srv.name);
+  fs.mkdirSync(AGENT_DIR, { recursive: true, mode: 0o700 });
+  const file = path.join(AGENT_DIR, `${srv.name}.json`);
+  fs.writeFileSync(`${file}.tmp`, JSON.stringify(snap), { mode: 0o600 });
+  fs.renameSync(`${file}.tmp`, file);
+  // Erste Meldung: gleich abgleichen, damit der Server sofort im Wiki steht
+  if (first) run("brainbox-connect", ["sync"]).catch(() => {});
+  return send(res, 200, { ok: true, name: srv.name, guests: snap.resources.length });
+}
+
+// --- Interne Aufrufe vom Wiki-Kern: Brainbox-Werkzeuge für Claude (MCP) ------------------------------
+// Nur vom selben Rechner und mit dem Schlüssel aus /etc/brainbox/intern.key. Ob der Nutzer Admin ist,
+// prüft das Werkzeug im Kern, bevor es hier anfragt.
+const INTERN_ACTIONS = new Set(["proxmox/add", "proxmox/agent", "proxmox/rename", "proxmox/remove", "proxmox/test", "netbird", "sync", "update/check", "update/start"]);
+async function intern(req, res, name) {
+  let key = "";
+  try { key = fs.readFileSync(path.join(CONF_DIR, "intern.key"), "utf8").trim(); } catch { /* fehlt */ }
+  const given = String(req.headers["x-brainbox-intern"] || "");
+  const local = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress);
+  if (!key || !local || !sameSecret(given, key)) return send(res, 403, { error: "intern" });
+  const body = await readBody(req, 64 * 1024);
+  if (body === null || body === undefined) return send(res, 400, { error: "JSON" });
+  if (name === "status") {
+    const s = await status(req, null);
+    return send(res, 200, { ok: true, version: s.version, update: s.update, wiki: { url: s.wiki.url }, proxmox: s.proxmox.map(({ tokenId, ...x }) => x), netbird: s.netbird ? { url: s.netbird.url } : null, sync: s.sync });
+  }
+  if (!INTERN_ACTIONS.has(name)) return send(res, 404, { error: "Unbekannte Aktion" });
+  return send(res, 200, await actions[name](body || {}));
+}
 
 async function zentrale(req, res) {
   const url = new URL(req.url, "http://x");
@@ -313,6 +402,8 @@ async function zentrale(req, res) {
     try { return send(res, 200, fs.readFileSync(file), type); } catch { return send(res, 404, "fehlt", "text/plain"); }
   }
   if (url.pathname.startsWith("/zentrale/go/")) return goTo(res, url.pathname.slice("/zentrale/go/".length));
+  if (url.pathname === "/zentrale/agent/push" && req.method === "POST") return agentPush(req, res);
+  if (url.pathname.startsWith("/zentrale/intern/") && req.method === "POST") return intern(req, res, url.pathname.slice("/zentrale/intern/".length));
   if (!url.pathname.startsWith("/zentrale/api/")) return send(res, 404, { error: "Nicht gefunden" });
 
   const me = await whoami(req);

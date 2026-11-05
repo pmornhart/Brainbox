@@ -2,6 +2,17 @@
 
 Brainbox hat eigene Versionen. Der Kern (Outline) ist je Version fest getestet und steht dabei.
 
+## 1.3.0 – 05.11.2026 · Kern: Outline v1.12.0
+
+Proxmox an jedem Standort, Claude packt mit an.
+
+- **Proxmox-Server an anderen Standorten:** Kommt Brainbox nicht an einen Server heran (andere Firewall, kein VPN), meldet er sich selbst. Ein Befehl aus *Einstellungen → Proxmox-Server* richtet dort den Brainbox-Agent ein; er liest alle 5 Minuten Nodes, VMs und Container (nur lesend) und schickt sie an Brainbox. Ohne Passwörter oder SSH-Schlüssel aus den VM-Einstellungen
+- **Server umbenennen** – jederzeit, auch wenn er schon verbunden ist. Die Wiki-Seiten bekommen den neuen Namen, Notizen und Links bleiben (`brainbox-connect proxmox rename ALT NEU`)
+- **Künstliche Intelligenz statt Claude-Konto:** Claude verbindet sich über den MCP-Anschluss mit deiner eigenen Anmeldung – ohne eigenes Konto. Neue Seite *Einstellungen → Brainbox → Künstliche Intelligenz* mit Schalter, Adresse, Anleitung für Claude-App und Claude Code und eigenen Anweisungen
+- **Claude bedient Brainbox:** neue Werkzeuge im MCP-Anschluss – Status, Proxmox-Server hinzufügen (auch an anderen Standorten), umbenennen, prüfen, entfernen, NetBird verbinden, abgleichen, Update prüfen und starten. Nur für Admins
+- **Claude kennt Brainbox:** Beim Verbinden bekommt Claude eine Beschreibung des Wikis – Sammlungen, was der Abgleich überschreibt, wie man Server hinzufügt
+- `brainbox-connect proxmox list` braucht kein `column` mehr
+
 ## 1.2.1 – 05.11.2026 · Kern: Outline v1.12.0
 
 - **Behoben: „Jetzt aktualisieren“ auf der Webseite.** Das Update lief als Unterprozess der Zentrale. Am Ende startete es die Zentrale neu, dabei beendete systemd auch das Update selbst – kurz bevor es die neue Version eintrug. Der neue Stand lief zwar, aber Brainbox meldete weiter „Update verfügbar“. Jetzt läuft das Update als eigener Dienst und wird fertig

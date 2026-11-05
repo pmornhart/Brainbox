@@ -1,6 +1,6 @@
 # 🧠 Brainbox – Proxmox Quick-Start
 
-Brainbox ist ein Wiki fürs Homelab als LXC-Container auf Proxmox VE. Ein Container ist ein Wiki. Dazu gehören eine Startseite mit deinem Homelab auf einen Blick, Login-Link, sechs Anmeldewege, aufgeräumte Einstellungen, eine Anleitung im Wiki, beliebig viele Proxmox-Server, NetBird und Claude als Mitschreiber.
+Brainbox ist ein Wiki fürs Homelab als LXC-Container auf Proxmox VE. Ein Container ist ein Wiki. Dazu gehören eine Startseite mit deinem Homelab auf einen Blick, Login-Link, sechs Anmeldewege, aufgeräumte Einstellungen, eine Anleitung im Wiki, beliebig viele Proxmox-Server, NetBird und Claude als Helfer, der Brainbox selbst bedienen kann.
 
 ## Installieren
 
@@ -81,9 +81,9 @@ Alle Einstellungen gibt es im Browser: oben in der Seitenleiste unter **Einstell
 | Gruppe | Bereich | Was du dort machst |
 |---|---|---|
 | **Brainbox** (nur Admins) | Übersicht | Status aller Verbindungen, jetzt abgleichen, Login-Link erstellen |
-| | Proxmox-Server | Server hinzufügen, prüfen, entfernen – mit kopierbaren Befehlen für den Lesezugang |
+| | Proxmox-Server | Server hinzufügen (im selben Netz oder an einem anderen Standort), prüfen, umbenennen, entfernen |
 | | NetBird | API-Adresse und Token eintragen, trennen |
-| | Claude | Konto einrichten, Schlüssel und Anleitung für App und Code |
+| | Künstliche Intelligenz | Claude über MCP mit deiner Anmeldung verbinden, eigene Anweisungen, KI an/aus |
 | | Anmeldung | E-Mail, Google, Microsoft, Discord, OIDC – mit Redirect-URIs zum Kopieren |
 | | Version & Update | installierte und neueste Version, Update starten, Protokoll |
 | **Wiki** | Allgemein, Mitglieder, Sicherheit, Vorlagen, Export | Name und Bild, Leute einladen, „Einladungen erforderlich“, Vorlagen, Sicherung aller Seiten |
@@ -142,6 +142,15 @@ Brainbox testet den Zugang, bevor es ihn speichert. `--insecure` überspringt di
 - `brainbox-connect proxmox list` zeigt die Server.
 - `brainbox-connect proxmox test [NAME]` prüft sie.
 - `brainbox-connect proxmox remove NAME` entfernt einen Server; seine Einträge werden archiviert.
+- `brainbox-connect proxmox rename ALT NEU` benennt einen Server um – jederzeit; die Wiki-Seiten werden mit umbenannt.
+
+**Server an einem anderen Standort** (Brainbox kommt nicht heran): `brainbox-connect proxmox agent NAME` oder in den Einstellungen „Server an einem anderen Standort“. Das erzeugt einen Befehl für die Shell des entfernten Proxmox-Hosts:
+
+```bash
+curl -fsSL https://<deine-domain>/zentrale/agent.sh | bash -s -- install https://<deine-domain> <Schlüssel>
+```
+
+Der Brainbox-Agent (`/usr/local/bin/brainbox-agent`, Zeitplan `brainbox-agent.timer`) liest dort alle 5 Minuten per `pvesh` Nodes, VMs und Container und schickt sie an Brainbox. Dafür muss nur die Wiki-Adresse vom Server aus erreichbar sein. Er sendet aus den VM-Einstellungen nur Beschreibung, Betriebssystem, Name, Tags und Netzwerk. Meldet er sich 15 Minuten nicht, zeigt die Server-Seite „keine Meldung“, die Einträge bleiben. `brainbox-agent status` zeigt die letzte Meldung, `brainbox-agent uninstall` entfernt ihn.
 
 Was im Wiki entsteht (Sammlung **Proxmox**):
 
@@ -193,23 +202,22 @@ So wirken die Regeln:
 - Die **Bereiche – Übersicht** zeigt zusätzlich, was noch ohne Bereich ist.
 - Die Seite „Zuordnungsregeln“ wird vom Abgleich nie überschrieben.
 
-## Claude verbinden
+## Künstliche Intelligenz: Claude verbinden
 
-Unter *Einstellungen → Brainbox → Claude* auf „Claude einrichten“, oder `brainbox-connect claude`. Das legt im Wiki an:
-
-- das Konto **Claude** (Rolle Mitglied)
-- die gemeinsame Sammlung **Von Claude**
-- einen API-Schlüssel
-- eine Anweisung für Claude beim Verbinden
-
-Claude verbindet sich über den eingebauten MCP-Anschluss `https://<deine-domain>/mcp`.
+Claude verbindet sich über den eingebauten MCP-Anschluss `https://<deine-domain>/mcp` – **mit deiner eigenen Anmeldung**, ohne eigenes Konto. Alles dazu steht unter *Einstellungen → Brainbox → Künstliche Intelligenz* (oder `brainbox-connect claude`).
 
 | Wo | Wie |
 |---|---|
-| Claude-App (claude.ai, Handy, Desktop) | Im Browser als Claude anmelden (Login-Link aus den Einstellungen). Dann in Claude: Einstellungen → Connectors → Benutzerdefinierten Connector hinzufügen → `https://<deine-domain>/mcp` → Verbinden → Zulassen. Braucht HTTPS aus dem Internet. |
-| Claude Code | `claude mcp add --transport http brainbox https://<deine-domain>/mcp --header "Authorization: Bearer <Schlüssel>"` |
+| Claude-App (claude.ai, Handy, Desktop) | Einstellungen → Connectors → Benutzerdefinierten Connector hinzufügen → `https://<deine-domain>/mcp` → Verbinden → im Brainbox-Fenster anmelden → Zulassen. Braucht HTTPS aus dem Internet. |
+| Claude Code | `claude mcp add --transport http brainbox https://<deine-domain>/mcp`, dann in Claude Code `/mcp` → brainbox → anmelden |
 
-Claude legt keine eigenen Sammlungen an, weil die privat wären. Es schreibt in bestehende Sammlungen oder in **Von Claude**. Abschalten: Einstellungen → Benutzer → Claude sperren.
+Was Claude kann:
+
+- **Im Wiki:** suchen, lesen, schreiben, kommentieren, Vorlagen nutzen – mit deinen Rechten und deinem Namen.
+- **Brainbox bedienen** (nur Admins): `brainbox_status`, Proxmox-Server hinzufügen (`brainbox_proxmox_add`, an anderem Standort `brainbox_proxmox_add_remote`), umbenennen, prüfen, entfernen, NetBird verbinden, abgleichen, Update prüfen und starten. Die Werkzeuge nutzen dieselben Wege wie Einstellungen und Terminal.
+- **Brainbox verstehen:** Beim Verbinden bekommt Claude eine Beschreibung des Wikis (Sammlungen, was der Abgleich überschreibt, wie man Server hinzufügt). Eigene Anweisungen kommen auf derselben Seite dazu.
+
+Claude legt keine eigenen Sammlungen an, ohne zu fragen; was nirgends passt, landet in **Von Claude**. Ältere Brainbox-Versionen hatten ein eigenes Konto „Claude“ – das braucht es nicht mehr, sperr es unter *Einstellungen → Wiki → Mitglieder*.
 
 ## Update
 
